@@ -3,6 +3,8 @@ cmake_minimum_required( VERSION 4.3 )
 project(
     cliTor
 )
+set( CMAKE_CXX_STANDARD 23 )
+set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
 # ===== regolith-lain BAS begin =====
 # Location of regolith-lain.
@@ -40,5 +42,9 @@ set( RGH_EXCOM_POPCOUNT
 add_subdirectory( "${RGH_ROOT_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/regolith-lain" )
 # ===== regolith-lain BAS end =====
 
-add_executable( ${PROJECT_NAME} main.cpp )
+file( GLOB srcs "${CMAKE_CURRENT_LIST_DIR}/modules/*.cpp" )
+
+add_executable( ${PROJECT_NAME} main.cpp ${srcs} )
 target_link_libraries( ${PROJECT_NAME} PRIVATE rgh::libosp )
+
+target_include_directories( ${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/" )
