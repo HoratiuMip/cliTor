@@ -20,24 +20,30 @@
 #define CLITOR_VERSION_STR "cliTor-v1.0.0"
 
 
-#define MODULE_HEADER(namespace_name,module_name) \
-    static const char* const MODULE_NAME = module_name; \
+#define JUNCTION_HEADER(namespace_name,junction_name) \
+    static const char* const JUNCTION_NAME = junction_name; \
     namespace namespace_name {
-#define MODULE_FOOTER \
+#define JUNCTION_FOOTER \
     };
 
-#define MODULE_PROXY_INSTALL(t, ...) \
-    static struct _module_proxy_installer_##t##_t_ { \
-        _module_proxy_installer_##t##_t_( void ) { \
+#define JUNCTION_PROXY_INSTALL(t, ...) \
+    static struct _junction_proxy_installer_##t##_t_ { \
+        _junction_proxy_installer_##t##_t_( void ) { \
             BridgE.install_proxy( rgh::HVec< t >::make( __VA_ARGS__ ) ); \
         } \
-    } _module_proxy_installer_##t##_; 
+    } _junction_proxy_installer_##t##_; 
 
-#define MODULE_DOCK_GET_ID_FNC_SIG \
+#define JUNCTION_PROXY_GET_NAME \
+    virtual std::string_view proxy_get_name( void ) const override { return JUNCTION_NAME; }
+
+#define JUNCTION_DOCK_GET_ID_FNC_SIG \
     virtual std::string_view dock_get_id( void ) const noexcept
 
-#define MODULE_DOCK_STOP_OR_BRIDGE_STOP \
+#define JUNCTION_DOCK_STOP_OR_BRIDGE_STOP \
     (this->dock_stop_signaled() or BridgE.status() != OK)
+
+#define JUNCTION_DOCK_IS_UIX_PERSISTENT \
+    virtual bool dock_uix_persistent( void ) const override { return true; }
 
 
 typedef   rgh::status_t   status_t;
@@ -54,7 +60,12 @@ public:
      * @brief: Immersion loop. Invoked repeatedly when the graphical user
      *           interface of the bridge is active.
      */
-    virtual status_t dock_imm_frame( const rgh::Immersive::frame_cb_args_t& args_ ) { return OK; }
+    virtual status_t dock_uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) { return OK; }
+
+    /**
+     * @brief: A UIX persistent dock will not have a close button.
+     */
+    virtual bool dock_uix_persistent( void ) const { return false; }
 };
 
 /**
@@ -69,17 +80,16 @@ public:
      * @brief: Get the name of the proxy. This is not unique, it is used to find
      *           and reference the Proxy in the Bridge proxy-registry.
      */
-    virtual std::string_view proxy_get_name( void ) const noexcept = 0;
+    virtual std::string_view proxy_get_name( void ) const = 0;
     /**
      * @brief: Called by the bridge after it starts.
      */
-    virtual void proxy_wake( void ) noexcept { return; }
+    virtual void proxy_wake( void ) { return; }
     /**
      * @brief: Pass a command line to the proxy. Minimally this must implement the
      *           install command for the docks.
      */
-    virtual status_t proxy_pass( std::string line_ ) noexcept = 0;
-
+    virtual status_t proxy_pass( std::string line_ ) { return ERR_NOT_IMPL; };
 };
 
 class Bridge : public rgh::bridge_t, public rgh::Daemon {
@@ -145,7 +155,7 @@ protected:
         auto proxys = _proxys.watch();
 
         ASSERT_AND( args->argc > 1 ) {
-            auto pitr  = proxys->find( "cli" );
+            auto pitr  = proxys->find( "##cli" );
             ASSERT_OR( pitr != proxys->end() ) {
                 logger->warn( "bridge: start: no CLI proxy to execute arguments." );
                 goto l_cli_end;
@@ -284,6 +294,12 @@ public:
     }
 
 /**
+ * @brief: Utility.
+ */
+public:
+    inline auto push_task( auto tsk_ ) { return _workers.push( std::move( tsk_ ) ); }
+
+/**
  * @brief: UIX.
  */
 public:
@@ -292,6 +308,8 @@ public:
         IN   int                           height_,
         IN   rgh::Immersive::SrfBeginAs_   bgnas_
     ) {
+        this->stop_uix();
+
         _uix_th = std::jthread( &rgh::Immersive::main, &_imm, 0, nullptr, rgh::Immersive::config_t{
             .ctx        = nullptr,
             .title      = CLITOR_VERSION_STR,
@@ -299,18 +317,17 @@ public:
             .height     = height_,
             .srf_bgn_as = bgnas_,
             .init_cb    = [ this ] ( const auto& args_ ) -> auto {
-            /* https://github.com/ocornut/imgui/issues/707 */
+            /* Cyberpunk theme from: https://github.com/ocornut/imgui/issues/707 */
+#pragma region UIX_Theme
                 ImGuiStyle& style = *_imm.imgui.stl;
                 ImVec4* colors = style.Colors;
 
-                // --- 1. Sizing and Spacing (Sharp & Aggressive) ---
                 style.WindowPadding = ImVec2(10.0f, 10.0f);
                 style.FramePadding = ImVec2(6.0f, 4.0f);
                 style.ItemSpacing = ImVec2(8.0f, 4.0f);
                 style.ScrollbarSize = 13.0f;
                 style.GrabMinSize = 10.0f;
 
-                // --- 2. Borders & Rounding (Cyberpunk = Hard Edges) ---
                 style.WindowRounding = 0.0f;
                 style.FrameRounding = 0.0f;
                 style.PopupRounding = 0.0f;
@@ -322,61 +339,50 @@ public:
                 style.FrameBorderSize = 1.0f;
                 style.PopupBorderSize = 1.0f;
 
-                // --- 3. The Neon Palette ---
-                // Background: Pitch Black / Deep Navy
-                // Neon Cyan: #00ff9f | Neon Pink: #ff003f | Neon Yellow: #fcee0a
-
-                // Text
-                colors[ImGuiCol_Text] = ImVec4(0.00f, 1.00f, 0.62f, 1.00f); // Neon Green/Cyan
+                colors[ImGuiCol_Text] = ImVec4(0.00f, 1.00f, 0.62f, 1.00f);
                 colors[ImGuiCol_TextDisabled] = ImVec4(0.20f, 0.40f, 0.35f, 1.00f);
 
-                // Backgrounds
-                colors[ImGuiCol_WindowBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f); // Near black
+                colors[ImGuiCol_WindowBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
                 colors[ImGuiCol_ChildBg] = ImVec4(0.02f, 0.02f, 0.04f, 0.00f);
                 colors[ImGuiCol_PopupBg] = ImVec4(0.02f, 0.02f, 0.04f, 0.98f);
 
-                // Borders (The "Glow" look)
-                colors[ImGuiCol_Border] = ImVec4(1.00f, 0.00f, 0.25f, 0.60f); // Neon Pink Border
+                colors[ImGuiCol_Border] = ImVec4(1.00f, 0.00f, 0.25f, 0.60f);
                 colors[ImGuiCol_BorderShadow] = ImVec4(1.00f, 0.00f, 0.25f, 0.20f);
 
-                // Frames
                 colors[ImGuiCol_FrameBg] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
                 colors[ImGuiCol_FrameBgHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.20f);
                 colors[ImGuiCol_FrameBgActive] = ImVec4(1.00f, 0.00f, 0.25f, 0.40f);
 
-                // Title Bars
                 colors[ImGuiCol_TitleBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
                 colors[ImGuiCol_TitleBgActive] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
                 colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
 
-                // Menus
                 colors[ImGuiCol_MenuBarBg] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
 
-                // Scrollbars
                 colors[ImGuiCol_ScrollbarBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
-                colors[ImGuiCol_ScrollbarGrab] = ImVec4(1.00f, 0.93f, 0.04f, 0.60f); // Neon Yellow
+                colors[ImGuiCol_ScrollbarGrab] = ImVec4(1.00f, 0.93f, 0.04f, 0.60f);
                 colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
                 colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(1.00f, 0.93f, 0.04f, 1.00f);
 
-                // Interactables
-                colors[ImGuiCol_CheckMark] = ImVec4(1.00f, 0.93f, 0.04f, 1.00f); // Yellow
-                colors[ImGuiCol_SliderGrab] = ImVec4(1.00f, 0.00f, 0.25f, 0.80f); // Pink
+                colors[ImGuiCol_CheckMark] = ImVec4(1.00f, 0.93f, 0.04f, 1.00f); 
+                colors[ImGuiCol_SliderGrab] = ImVec4(1.00f, 0.00f, 0.25f, 0.80f);
                 colors[ImGuiCol_SliderGrabActive] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
-                colors[ImGuiCol_Button] = ImVec4(0.00f, 1.00f, 0.62f, 0.20f); // Cyan Ghost
+                colors[ImGuiCol_Button] = ImVec4(0.00f, 1.00f, 0.62f, 0.20f);
                 colors[ImGuiCol_ButtonHovered] = ImVec4(0.00f, 1.00f, 0.62f, 0.50f);
                 colors[ImGuiCol_ButtonActive] = ImVec4(0.00f, 1.00f, 0.62f, 1.00f);
                 colors[ImGuiCol_Header] = ImVec4(1.00f, 0.00f, 0.25f, 0.30f);
                 colors[ImGuiCol_HeaderHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.50f);
                 colors[ImGuiCol_HeaderActive] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
 
-                // Tabs
                 colors[ImGuiCol_Tab] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
                 colors[ImGuiCol_TabHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.80f);
                 colors[ImGuiCol_TabActive] = ImVec4(0.80f, 0.00f, 0.20f, 1.00f);
 
-                // Misc
                 colors[ImGuiCol_TextSelectedBg] = ImVec4(1.00f, 0.93f, 0.04f, 0.30f);
                 colors[ImGuiCol_NavHighlight] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
+
+                colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
+#pragma endregion UIX_Theme
                             
                 _imm.imgui.io->FontGlobalScale = 1.22f;
                 _imm->disengage_face_culling();   
@@ -392,16 +398,78 @@ public:
     }
 
     void stop_uix( void ) {
-
+        ASSERT_AND( _uix_th.joinable() ) { _imm.sig_main_exit(); _uix_th.join(); }
     }
+
+    inline bool uix_is_up( void ) { return _uix_th.joinable(); }
 
 protected:
     RGH_inline status_t _uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) {
         _imm->clear();
-        for( auto& dock : *_docks.control() ) {
-            dock.second->dock_imm_frame( args_ );
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos( viewport->WorkPos );
+        ImGui::SetNextWindowSize( viewport->WorkSize );
+
+        bool uix_open = true;
+        ImGui::Begin( CLITOR_VERSION_STR, &uix_open, 
+            ImGuiWindowFlags_NoDecoration          |
+            ImGuiWindowFlags_NoMove                |
+            ImGuiWindowFlags_NoResize              |  
+            ImGuiWindowFlags_NoSavedSettings       |
+            ImGuiWindowFlags_NoBringToFrontOnFocus
+        );
+
+        if( ImGui::BeginTable( "##proxy-dock-split", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV ) ) {
+            ImGui::TableSetupColumn( "##proxys", ImGuiTableColumnFlags_WidthFixed, 150.0f );
+            ImGui::TableSetupColumn( "##docks", ImGuiTableColumnFlags_WidthStretch );
+
+            ImGui::TableNextColumn();
+            
+            ImGui::Text( "cliTor" );
+            ImGui::Separator();
+            
+            int proxy_id = 0x0; for( auto& proxy : *_proxys.watch() ) {
+                ASSERT_OR( not proxy.first.starts_with( "##" ) ) continue;
+
+                ImGui::PushID( proxy_id );
+
+                if( ImGui::Selectable( proxy.first.c_str() ) ) {
+
+                }
+
+                ImGui::PopID();
+            }
+    
+            ImGui::TableNextColumn();
+
+            if( auto docks = _docks.watch(); ImGui::BeginTabBar( "##docks", ImGuiTabBarFlags_None ) ) {
+                int dock_id = 0x0; for( auto& dock : *docks ) {
+                    ImGui::PushID( dock_id );
+
+                    bool tab_open = true;
+                    if( ImGui::BeginTabItem( dock.first.c_str(), dock.second->dock_uix_persistent() ? nullptr : &tab_open ) ) {
+                        ImGui::BeginChild( "##dock_frame", ImVec2{ 0, -ImGui::GetFrameHeightWithSpacing() }, ImGuiChildFlags_Border );
+                        dock.second->dock_uix_frame( args_ );
+                        ImGui::EndChild(); ImGui::EndTabItem();
+                    }
+                    if( not tab_open ) this->push_task( [ this, dock_id = dock.first ] ( void ) -> void { this->uninstall_dock( dock_id ); } );
+
+                    ImGui::PopID();
+                }
+
+                ImGui::EndTabBar();
+            }
+
+            ImGui::EndTable();
         }
-        return this->daemon_is_started() ? OK : ERR_TERMINATED;
+
+        // --- 2. Bottom Command Bar ---
+        ImGui::Separator(); // Horizontal line separating workspace from command line
+        ImGui::Text("COMMAND"); 
+
+        ImGui::End();
+        return uix_open and this->daemon_is_started() ? OK : ERR_TERMINATED;
     }
 
 };

@@ -2,7 +2,7 @@
 #include <print>
 
 #include <bridge.hpp>
-MODULE_HEADER( cli, "cli" )
+JUNCTION_HEADER( cli, "##cli" )
 
 class Cli : public Dock, public Proxy {
 public:
@@ -64,12 +64,6 @@ protected:
     std::jthread    _cin_th   = {};
 
 protected:
-    struct _uix_t {
-        std::string                     cin   = {};
-        rgh::Dispenser< std::string >   cout  = { rgh::DispenserMode_Trylock };
-    } _uix;
-
-protected:
     void _cin_main( void ) {
         std::string line = {}; 
 
@@ -106,19 +100,28 @@ public:
     }
 
 public:
-    virtual std::string_view proxy_get_name( void ) const noexcept override { return MODULE_NAME; }
+    JUNCTION_PROXY_GET_NAME
 
-    virtual void proxy_wake( void ) noexcept override {
-        BridgE.install_dock( MODULE_NAME, *this );
-
+    virtual void proxy_wake( void ) override {
         _cin_th = std::jthread( &Cli::_cin_main, this );
     }
 
-    virtual status_t proxy_pass( std::string line_ ) noexcept {
+    virtual status_t proxy_pass( std::string line_ ) override {
         return this->execute_and_print( line_ );
+    }
+
+protected:
+    struct _uix_t {
+        std::string                     cin   = {};
+        rgh::Dispenser< std::string >   cout  = { rgh::DispenserMode_Trylock };
+    } _uix;
+
+public:
+    virtual status_t dock_uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) override {
+        return OK;
     }
 
 };
 
-MODULE_PROXY_INSTALL( Cli )
-MODULE_FOOTER
+JUNCTION_PROXY_INSTALL( Cli )
+JUNCTION_FOOTER

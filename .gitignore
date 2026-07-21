@@ -1,3 +1,5 @@
-build
+build/
+.vscode/
 
-.vscode
+# External Junctions
+src/junctions/charge-watch/
