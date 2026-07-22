@@ -2,4 +2,4 @@ build/
 .vscode/
 
 # External Junctions
-src/junctions/charge-watch/
+src/junctions/charge-watch

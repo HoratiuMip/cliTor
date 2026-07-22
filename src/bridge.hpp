@@ -92,7 +92,7 @@ public:
     virtual status_t proxy_pass( std::string line_ ) { return ERR_NOT_IMPL; };
 };
 
-class Bridge : public rgh::bridge_t, public rgh::Daemon {
+class Bridge : public rgh::bridge_t, public rgh::Daemon, public rgh::Thread_pool  {
 public:
     struct start_args_t {
         int      argc   = 0;
@@ -104,9 +104,6 @@ public:
     Bridge( void ) : rgh::bridge_t{ CLITOR_VERSION_STR } {
         logger->info( "bridge: init ok." );
     }
-
-protected:
-    rgh::Thread_pool    _workers   = {};
 
 protected:
     rgh::Dispenser< std::map< std::string, rgh::HVec< Proxy > > >   _proxys   = { rgh::DispenserMode_Lock };
@@ -137,7 +134,7 @@ protected:
         }
         auto* args = ( start_args_t* )ctx_;
 
-        ASSERT_STATUS_AND( _workers.launch( args->wcnt ) ) {
+        ASSERT_STATUS_AND( this->rgh::Thread_pool::launch( args->wcnt ) ) {
             logger->info( "bridge: start: launched {} workers.", args->wcnt );
         } else {
             logger->warn( "bridge: start: bad workers ({}) launch.", args->wcnt );
@@ -294,12 +291,6 @@ public:
     }
 
 /**
- * @brief: Utility.
- */
-public:
-    inline auto push_task( auto tsk_ ) { return _workers.push( std::move( tsk_ ) ); }
-
-/**
  * @brief: UIX.
  */
 public:
@@ -403,6 +394,8 @@ public:
 
     inline bool uix_is_up( void ) { return _uix_th.joinable(); }
 
+    operator rgh::Immersive* ( void ) { return &_imm; }
+
 protected:
     RGH_inline status_t _uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) {
         _imm->clear();
@@ -453,7 +446,7 @@ protected:
                         dock.second->dock_uix_frame( args_ );
                         ImGui::EndChild(); ImGui::EndTabItem();
                     }
-                    if( not tab_open ) this->push_task( [ this, dock_id = dock.first ] ( void ) -> void { this->uninstall_dock( dock_id ); } );
+                    if( not tab_open ) this->push( [ this, dock_id = dock.first ] ( void ) -> void { this->uninstall_dock( dock_id ); } );
 
                     ImGui::PopID();
                 }
