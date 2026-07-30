@@ -35,7 +35,7 @@ set( RGH_TARGET_PLATFORM "" )
 # * Which external components to make, indicated by a string containing 'y' and 'n' ( for "yes" and "no" ), in the order in which they are built in the script.
 # Example: "ynnny" - makes the first and fifth external component.
 set( RGH_EXCOM_POPCOUNT
-    "yyyyyyn"
+    "yyyyyyny"
 )
 
 # Add regolith-lain.

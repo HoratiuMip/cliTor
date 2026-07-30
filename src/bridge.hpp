@@ -34,62 +34,55 @@
     } _junction_proxy_installer_##t##_; 
 
 #define JUNCTION_PROXY_GET_NAME \
-    virtual std::string_view proxy_get_name( void ) const override { return JUNCTION_NAME; }
+    virtual std::string_view proxy_get_name() const override { return JUNCTION_NAME; }
+#define JUNCTION_PROXY_IS_DOCK \
+    virtual Dock* proxy_as_dock() override { return static_cast< Dock* >( this ); }
 
 #define JUNCTION_DOCK_GET_ID_FNC_SIG \
-    virtual std::string_view dock_get_id( void ) const noexcept
+    virtual std::string_view dock_get_id() const noexcept
 
 #define JUNCTION_DOCK_STOP_OR_BRIDGE_STOP \
     (this->dock_stop_signaled() or BridgE.status() != OK)
 
 #define JUNCTION_DOCK_IS_UIX_PERSISTENT \
-    virtual bool dock_uix_persistent( void ) const override { return true; }
+    virtual const bool dock_uix_persistent() const override { return true; }
 
 
 typedef   rgh::status_t   status_t;
 
-/**
- * @brief: Dock structure. This object handles everything needed for
- *           a specific communication test, such as a serial monitor.
- */
+/*
+# DETAILS: The dock is the tool itself.
+*/
 class Dock {
 public: friend class Bridge;
 
 public:
-    /**
-     * @brief: Immersion loop. Invoked repeatedly when the graphical user
-     *           interface of the bridge is active.
-     */
-    virtual status_t dock_uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) { return OK; }
+    class UIX_pack {
+        public: virtual ~UIX_pack() = 0;
+    };
 
-    /**
-     * @brief: A UIX persistent dock will not have a close button.
-     */
-    virtual bool dock_uix_persistent( void ) const { return false; }
+public:
+    struct dock_uix_frame_args_t : rgh::Immersive::frame_cb_args_t {
+        UIX_pack*   pack   = nullptr;
+    };
+
+public:
+    virtual std::unique_ptr< UIX_pack > dock_uix_begin     ()                                           { return nullptr; }
+    virtual status_t                    dock_uix_frame     ( const dock_uix_frame_args_t& args_ )       { return OK; }
+    virtual void                        dock_uix_end       ()                                           { return; }
+    virtual const bool                  dock_uix_persistent()                                     const { return false; }
 };
 
-/**
- * @brief: Proxy structure. This object helps the Bridge to instantiate and
- *           talk to Docks.
- */
 class Proxy {
 public: friend class Bridge;
 
 public: 
-    /**
-     * @brief: Get the name of the proxy. This is not unique, it is used to find
-     *           and reference the Proxy in the Bridge proxy-registry.
-     */
-    virtual std::string_view proxy_get_name( void ) const = 0;
-    /**
-     * @brief: Called by the bridge after it starts.
-     */
-    virtual void proxy_wake( void ) { return; }
-    /**
-     * @brief: Pass a command line to the proxy. Minimally this must implement the
-     *           install command for the docks.
-     */
+    virtual std::string_view proxy_get_name() const = 0;
+    
+    virtual void     proxy_wake()                    { return; }
     virtual status_t proxy_pass( std::string line_ ) { return ERR_NOT_IMPL; };
+
+    virtual Dock* proxy_as_dock() { return nullptr; }
 };
 
 class Bridge : public rgh::bridge_t, public rgh::Daemon, public rgh::Thread_pool  {
@@ -106,18 +99,33 @@ public:
     }
 
 protected:
-    rgh::Dispenser< std::map< std::string, rgh::HVec< Proxy > > >   _proxys   = { rgh::DispenserMode_Lock };
-    rgh::Dispenser< std::map< std::string, rgh::HVec< Dock > > >    _docks    = { rgh::DispenserMode_Lock };
+    struct _proxy_entry_t {
+        rgh::HVec< Proxy >   ref   = nullptr;
 
-protected:
-    rgh::Immersive   _imm      = {};
-    std::jthread     _uix_th   = {};
+        auto operator->() const { return ref.operator->(); }
+    };
 
-/**
- * @brief: Daemon overrides.
- */
+    struct _dock_entry_t {
+        struct uix_t {
+            std::unique_ptr< Dock::UIX_pack >   pack   = nullptr;
+        };
+
+        rgh::HVec< Dock >   ref   = nullptr;
+        uix_t               uix   = {};
+
+        auto operator->() const { return ref.operator->(); }
+    };
+
+    rgh::Dispenser< std::map< std::string, _proxy_entry_t > >   _proxy_tbl   = { rgh::DispenserMode_Lock };
+    rgh::Dispenser< std::map< std::string, _dock_entry_t > >    _dock_tbl    = { rgh::DispenserMode_Lock };
+
+    struct _specprox_tbl_t {
+        rgh::HVec< Proxy >   cli   = nullptr;
+    } _specprox_tbl;
+
+#pragma region DAEMON
 public:
-    virtual std::string_view daemon_name( void ) const override { return "cliTor bridge"; }
+    virtual std::string_view daemon_name() const override { return "cliTor bridge"; }
     virtual std::string daemon_report( [[maybe_unused]]void* ) const override {
         return std::format( 
             "/// cliTor bridge - " CLITOR_VERSION_STR "\n"
@@ -128,93 +136,109 @@ protected:
     virtual status_t _daemon_start(
         IN   void*   ctx_
     ) override {
+    //# Check for valid context and get the daemon start arguments.
         ASSERT_OR( ctx_ ) {
             logger->error( "bridge: start: null context." );
             return ERR_BADARG;
         }
         auto* args = ( start_args_t* )ctx_;
 
+    //# Launch the worker threads. Might pass this to the daemon wake function so
+    //    the number of threads can be chosen via the CLI.
         ASSERT_STATUS_AND( this->rgh::Thread_pool::launch( args->wcnt ) ) {
             logger->info( "bridge: start: launched {} workers.", args->wcnt );
         } else {
             logger->warn( "bridge: start: bad workers ({}) launch.", args->wcnt );
         }
 
-        logger->info( "bridge: start ok." );
+        logger->info( "bridge: started." );
         return OK;
     }
 
     virtual void _daemon_wake(
         IN   void*   ctx_
     ) {
-        auto* args = ( start_args_t* )ctx_;
-        
-        auto proxys = _proxys.watch();
+    //# Get the daemon start arguments and acquire a watch on the proxy table.
+    //# No need to check on ctx_ since _daemon_start() is chained before this function. 
+        auto* args     = ( start_args_t* )ctx_;
+        auto proxy_tbl = _proxy_tbl.watch();
 
-        ASSERT_AND( args->argc > 1 ) {
-            auto pitr  = proxys->find( "##cli" );
-            ASSERT_OR( pitr != proxys->end() ) {
-                logger->warn( "bridge: start: no CLI proxy to execute arguments." );
+    //# Wake all the preinstalled proxys.
+        for( auto& proxy : *proxy_tbl ) proxy.second->proxy_wake();
+
+    //# Find the command line interpreter proxy and save it in the special proxys table.
+    //# Execute each argument from the shell command line as a separate command if availble.
+        {
+            auto itr = proxy_tbl->find( "#cli" );    
+            ASSERT_OR( itr != proxy_tbl->end() ) {
+                logger->warn( "bridge: start: no CLI proxy found." );
                 goto l_cli_end;
             }
-
-            auto cli_proxy = pitr->second;
-            ASSERT_OR( cli_proxy ) {
+            auto& cli = itr->second;
+            ASSERT_OR( cli.ref ) {
                 logger->error( "bridge: start: null CLI proxy." );
                 goto l_cli_end;
             }
+            _specprox_tbl.cli = cli.ref;
+            logger->info( "bridge: start: found the CLI proxy." );
 
-            for( int n = 1; n < args->argc; ++n ) {
-                cli_proxy->proxy_pass( args->argv[ n ] );
+            if( args->argc > 1 ) {
+                for( int n = 1; n < args->argc; ++n ) {
+                    cli->proxy_pass( args->argv[ n ] );
+                }
+                logger->info( "bridge: start: passed {} arguments to the CLI.", args->argc - 1 );
+            } else {
+                logger->info( "bridge: start: no arguments to pass to the CLI." );
             }
-        } else {
-            logger->info( "bridge: start: no arguments to execute." );
-        }
-    l_cli_end:
 
-        for( auto& proxy : *proxys ) proxy.second->proxy_wake();
+        } l_cli_end:
+
         return;
     }
 
     virtual status_t _daemon_stop(
         IN   void*   ctx_
     ) override {
+    //# Kill the graphical user interface.
+        uix_down();
+
+        logger->info( "bridge: shutdown." );
         return OK;
     }
+#pragma endregion DAEMON
 
-/**
- * @brief: Proxys.
- */
+#pragma region PROXY
 public:
     status_t install_proxy(
         IN   rgh::HVec< Proxy >&&   proxy_
     ) {
+    //# Checl for a valid proxy, i.e. valid pointer and non-empty name.
         ASSERT_OR( proxy_ ) {
-            logger->error( "bridge: install proxy: null." );
+            logger->error( "bridge: install proxy: null proxy." );
             return ERR_BADARG;
         }
-        
         auto pn = proxy_->proxy_get_name();
         ASSERT_OR( not pn.empty() ) {
             logger->error( "bridge: install proxy: empty name." );
             return ERR_BADARG;
         }
 
-        auto proxys = _proxys.control();
-        ASSERT_OR( proxys ) {
-            logger->error( "bridge: install proxy (\"{}\"): bad registry control.", pn );
+    //# Acquire control over the proxy table and install it if it does not already exist.
+        auto proxy_tbl = _proxy_tbl.control();
+        ASSERT_OR( proxy_tbl ) {
+            logger->error( "bridge: install proxy (\"{}\"): bad table control.", pn );
             return ERR_BUSY;
         }
 
-        auto& proxy = ( *proxys )[ std::string{ pn } ];
-        ASSERT_OR( not proxy ) {
-            proxys.release();
-            logger->error( "bridge: install proxy (\"{}\"): already exists.", pn );
+        auto& proxy = ( *proxy_tbl )[ std::string{ pn } ];
+        ASSERT_OR( not proxy.ref ) {
+            proxy_tbl.release();
+            logger->error( "bridge: install proxy (\"{}\"): already installed.", pn );
             return ERR_WOULD_OVRWR; 
         }
 
-        proxy = std::move( proxy_ );
-        proxys.release();
+        proxy.ref = std::move( proxy_ );
+        proxy_tbl.release();
 
         logger->info( "bridge: installed proxy: \"{}\".", pn );
         return OK;
@@ -223,94 +247,120 @@ public:
     status_t uninstall_proxy(
         IN   const std::string&   pn_
     ) {
-        auto proxys = _proxys.control();
-        ASSERT_OR( proxys ) {
-            logger->error( "bridge: uninstall proxy (\"{}\"): bad registry control.", pn_ );
+    //# Acquire control over the proxy table and erase the matching entry.
+        auto proxy_tbl = _proxy_tbl.control();
+        
+        ASSERT_OR( proxy_tbl ) {
+            logger->error( "bridge: uninstall proxy (\"{}\"): bad table control.", pn_ );
             return ERR_BUSY;
         }
 
-        proxys->erase( pn_ );
-        proxys.release();
+        proxy_tbl->erase( pn_ );
+        proxy_tbl.release();
 
         logger->info( "bridge: uninstalled proxy: \"{}\".", pn_ );
         return OK;
     }
+#pragma endregion PROXY
 
-/**
- * @brief: Docks.
- */
+#pragma region DOCK
 public:
     status_t install_dock(
         IN   std::string           did_,
         IN   rgh::HVec< Dock >&&   dock_
     ) {
+    //# Check for a valid dock, i.e. valid pointer and non-empty ID.
         ASSERT_OR( dock_ ) {
-            logger->error( "bridge: install dock: null." );
+            logger->error( "bridge: install dock: null dock." );
             return ERR_BADARG;
         }
-
         ASSERT_OR( not did_.empty() ) {
             logger->error( "bridge: install dock: empty name." );
             return ERR_BADARG;
         }
 
-        auto docks = _docks.control();
-        ASSERT_OR( docks ) {
-            logger->error( "bridge: install dock (\"{}\"): bad registry control.", did_ );
+        auto dock_tbl = _dock_tbl.control();
+        ASSERT_OR( dock_tbl ) {
+            logger->error( "bridge: install dock (\"{}\"): bad table control.", did_ );
             return ERR_BUSY;
         }
 
-        auto& dock = ( *docks )[ did_ ];
-        ASSERT_OR( not dock ) {
-            docks.release();
-            logger->error( "bridge: install dock (\"{}\"): already exists.", did_ );
+        auto& dock = ( *dock_tbl )[ did_ ];
+        ASSERT_OR( not dock.ref ) {
+            dock_tbl.release();
+            logger->error( "bridge: install dock (\"{}\"): already installed.", did_ );
             return ERR_WOULD_OVRWR; 
         }
 
-        dock = std::move( dock_ );
-        docks.release();
+        dock.ref = std::move( dock_ );
+        dock_tbl.release();
 
         logger->info( "bridge: installed dock: \"{}\".", did_ );
         return OK;
     }
 
     status_t uninstall_dock(
-        IN   const std::string&   did_
+        IN   const std::string&   id_
     ) {
-        auto docks = _docks.control();
-        ASSERT_OR( docks ) {
-            logger->error( "bridge: uninstall dock (\"{}\"): bad registry control.", did_ );
+    //# Acquire control over the dock table and obtain the entry.
+        auto dock_tbl = _dock_tbl.control();
+        ASSERT_OR( dock_tbl ) {
+            logger->error( "bridge: uninstall dock (\"{}\"): bad table control.", id_ );
             return ERR_BUSY;
         }
 
-        docks->erase( did_ );
-        docks.release();
+        auto itr = dock_tbl->find( id_ );
+        ASSERT_OR( itr != dock_tbl->end() ) return OK;
+    
+    //# Release any references pointing to this dock entry.
+        if( _uix ) {
+            if( _uix->focus == &itr->second ) _uix->focus = nullptr;
+        }
+        
+    //# Erase the entry.
+        dock_tbl->erase( itr );
+        dock_tbl.release();
 
-        logger->info( "bridge: uninstalled dock: \"{}\".", did_ );
+        logger->info( "bridge: uninstalled dock: \"{}\".", id_ );
         return OK;
     }
+#pragma endregion DOCK
 
-/**
- * @brief: UIX.
- */
+#pragma region UIX
+protected:
+    struct _uix_t {
+        rgh::HVec< rgh::Immersive >   imm      = rgh::HVec< rgh::Immersive >::make();
+        _dock_entry_t*                focus    = nullptr;
+        std::jthread                  imm_th   = {};
+    };
+    std::unique_ptr< _uix_t >   _uix   = nullptr;
+
 public:
-    void start_uix( 
+    void uix_up( 
         IN   int                           width_,
         IN   int                           height_,
         IN   rgh::Immersive::SrfBeginAs_   bgnas_
     ) {
-        this->stop_uix();
+    //# Load or reload the UIX.
+        ASSERT_OR( not uix_is_up() ) uix_down();
+        _uix = std::make_unique< _uix_t >();
 
-        _uix_th = std::jthread( &rgh::Immersive::main, &_imm, 0, nullptr, rgh::Immersive::config_t{
+    //# Notify active docks to load their UIX stuff.
+        for( auto& [ id, dock ] : *_dock_tbl.control() ) {
+            dock.uix.pack = dock->dock_uix_begin();
+        }
+
+    //# Launch the UIX thread.
+        _uix->imm_th = std::jthread( &rgh::Immersive::main, _uix->imm.get(), 0, nullptr, rgh::Immersive::config_t{
             .ctx        = nullptr,
             .title      = CLITOR_VERSION_STR,
             .width      = width_,
             .height     = height_,
             .srf_bgn_as = bgnas_,
             .init_cb    = [ this ] ( const auto& args_ ) -> auto {
-            /* Cyberpunk theme from: https://github.com/ocornut/imgui/issues/707 */
+/* Cyberpunk theme from: https://github.com/ocornut/imgui/issues/707 */
 #pragma region UIX_Theme
-                ImGuiStyle& style = *_imm.imgui.stl;
+                ImGuiStyle& style = *_uix->imm->imgui.stl;
                 ImVec4* colors = style.Colors;
 
                 style.WindowPadding = ImVec2(10.0f, 10.0f);
@@ -373,10 +423,9 @@ public:
                 colors[ImGuiCol_NavHighlight] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
 
                 colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
-#pragma endregion UIX_Theme
-                            
-                _imm.imgui.io->FontGlobalScale = 1.22f;
-                _imm->disengage_face_culling();   
+#pragma endregion UIX_Theme        
+                _uix->imm->imgui.io->FontGlobalScale = 1.22f;
+                _uix->imm->disengage_face_culling();   
                 return OK;
             },
             .loop_cb    = [ this ] ( const auto& args_ ) -> auto { 
@@ -388,83 +437,115 @@ public:
         } );
     }
 
-    void stop_uix( void ) {
-        ASSERT_AND( _uix_th.joinable() ) { _imm.sig_main_exit(); _uix_th.join(); }
+    void uix_down( void ) {
+        ASSERT_OR( _uix ) return;
+        
+        _uix->imm->sig_main_exit();
+        _uix.reset();
     }
 
-    inline bool uix_is_up( void ) { return _uix_th.joinable(); }
+    status_t uix_focus(
+        IN   const std::string&   id_
+    ) {
+    //# Assert that UIX is up.
+        ASSERT_OR( _uix ) return ERR_NO_RESOLVE;
 
-    operator rgh::Immersive* ( void ) { return &_imm; }
+    //# Acquire control over the dock table and set the UIX focus.
+        auto dock_tbl = _dock_tbl.control();
+        
+        auto itr = dock_tbl->find( id_ );
+        ASSERT_OR( itr != dock_tbl->end() ) return ERR_NOT_FOUND;
+        
+        _uix->focus = &itr->second;
+        return OK;
+    }
+
+    bool uix_is_up( void ) { return (bool)_uix; }
+    rgh::Immersive* uix_imm_weak( void ) { return _uix ? _uix->imm.get() : nullptr; }
+    operator rgh::Immersive* ( void ) { return _uix ? _uix->imm.get() : nullptr; }
 
 protected:
     RGH_inline status_t _uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) {
-        _imm->clear();
+        _uix->imm->clear();
 
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const auto* viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos( viewport->WorkPos );
         ImGui::SetNextWindowSize( viewport->WorkSize );
 
-        bool uix_open = true;
-        ImGui::Begin( CLITOR_VERSION_STR, &uix_open, 
-            ImGuiWindowFlags_NoDecoration          |
-            ImGuiWindowFlags_NoMove                |
-            ImGuiWindowFlags_NoResize              |  
-            ImGuiWindowFlags_NoSavedSettings       |
-            ImGuiWindowFlags_NoBringToFrontOnFocus
-        );
+        if( not _uix->focus ) {
+            ImGui::Begin( CLITOR_VERSION_STR, nullptr, 
+                ImGuiWindowFlags_NoDecoration          |
+                ImGuiWindowFlags_NoMove                |
+                ImGuiWindowFlags_NoResize              |  
+                ImGuiWindowFlags_NoSavedSettings       |
+                ImGuiWindowFlags_NoBringToFrontOnFocus
+            );
 
-        if( ImGui::BeginTable( "##proxy-dock-split", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV ) ) {
-            ImGui::TableSetupColumn( "##proxys", ImGuiTableColumnFlags_WidthFixed, 150.0f );
-            ImGui::TableSetupColumn( "##docks", ImGuiTableColumnFlags_WidthStretch );
+            if( ImGui::BeginTable( "##proxy-dock-split", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV ) ) {
+                ImGui::TableSetupColumn( "##proxys", ImGuiTableColumnFlags_WidthFixed, 150.0f );
+                ImGui::TableSetupColumn( "##docks", ImGuiTableColumnFlags_WidthStretch );
 
-            ImGui::TableNextColumn();
-            
-            ImGui::Text( "cliTor" );
-            ImGui::Separator();
-            
-            int proxy_id = 0x0; for( auto& proxy : *_proxys.watch() ) {
-                ASSERT_OR( not proxy.first.starts_with( "##" ) ) continue;
+                ImGui::TableNextColumn();
+                
+                ImGui::Text( "cliTor" );
+                ImGui::Separator();
+                
+                int proxy_id = 0x0; for( auto& proxy : *_proxy_tbl.watch() ) {
+                    ASSERT_OR( not proxy.first.starts_with( "#" ) ) continue;
 
-                ImGui::PushID( proxy_id );
+                    ImGui::PushID( proxy_id );
 
-                if( ImGui::Selectable( proxy.first.c_str() ) ) {
+                    if( ImGui::Selectable( proxy.first.c_str() ) ) {
 
-                }
-
-                ImGui::PopID();
-            }
-    
-            ImGui::TableNextColumn();
-
-            if( auto docks = _docks.watch(); ImGui::BeginTabBar( "##docks", ImGuiTabBarFlags_None ) ) {
-                int dock_id = 0x0; for( auto& dock : *docks ) {
-                    ImGui::PushID( dock_id );
-
-                    bool tab_open = true;
-                    if( ImGui::BeginTabItem( dock.first.c_str(), dock.second->dock_uix_persistent() ? nullptr : &tab_open ) ) {
-                        ImGui::BeginChild( "##dock_frame", ImVec2{ 0, -ImGui::GetFrameHeightWithSpacing() }, ImGuiChildFlags_Border );
-                        dock.second->dock_uix_frame( args_ );
-                        ImGui::EndChild(); ImGui::EndTabItem();
                     }
-                    if( not tab_open ) this->push( [ this, dock_id = dock.first ] ( void ) -> void { this->uninstall_dock( dock_id ); } );
 
                     ImGui::PopID();
                 }
+        
+                ImGui::TableNextColumn();
 
-                ImGui::EndTabBar();
+                if( auto dock_tbl = _dock_tbl.watch(); ImGui::BeginTabBar( "##docks", ImGuiTabBarFlags_None ) ) {
+                    int crtno = 0x0; for( auto& [ id, dock ] : *dock_tbl ) {
+                        ImGui::PushID( crtno );
+
+                        bool tab_open = true;
+                        if( ImGui::BeginTabItem( id.c_str(), dock->dock_uix_persistent() ? nullptr : &tab_open ) ) {
+                            ImGui::BeginChild( "##dock_frame", ImVec2{ 0, -ImGui::GetFrameHeightWithSpacing() }, ImGuiChildFlags_Border );
+                                dock->dock_uix_frame( { args_, dock.uix.pack.get() } );
+                            ImGui::EndChild(); ImGui::EndTabItem();
+                        }
+                        if( not tab_open ) this->push( [ this, id ] { this->uninstall_dock( id ); } );
+
+                        ImGui::PopID();
+                    }
+
+                    ImGui::EndTabBar();
+                }
+
+                ImGui::EndTable();
             }
 
-            ImGui::EndTable();
+            ImGui::Separator();
+            ImGui::Text( "COMMAND" ); 
+        } else {
+            bool focused = true;
+
+            ImGui::Begin( CLITOR_VERSION_STR, &focused, 
+                ImGuiWindowFlags_NoMove                |
+                ImGuiWindowFlags_NoResize              |  
+                ImGuiWindowFlags_NoSavedSettings       |
+                ImGuiWindowFlags_NoBringToFrontOnFocus
+            );
+
+            auto dock_tbl = _dock_tbl.watch();
+            _uix->focus->ref->dock_uix_frame( { args_, _uix->focus->uix.pack.get() } );
         }
 
-        // --- 2. Bottom Command Bar ---
-        ImGui::Separator(); // Horizontal line separating workspace from command line
-        ImGui::Text("COMMAND"); 
-
         ImGui::End();
-        return uix_open and this->daemon_is_started() ? OK : ERR_TERMINATED;
+        return this->daemon_is_started() ? OK : ERR_TERMINATED;
     }
 
+#pragma endregion UIX
 };
 extern Bridge BridgE;
 

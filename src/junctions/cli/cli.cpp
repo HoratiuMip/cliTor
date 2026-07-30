@@ -2,7 +2,7 @@
 #include <print>
 
 #include <bridge.hpp>
-JUNCTION_HEADER( cli, "##cli" )
+JUNCTION_HEADER( cli, "#cli" )
 
 class Cli : public Dock, public Proxy {
 public:
@@ -52,7 +52,7 @@ public:
             case 'M': bgnas = rgh::Immersive::SrfBeginAs_Maximize; break;
         RGH_FASTCLI_OPT_SWITCH_END
 
-        BridgE.start_uix( width, height, bgnas );
+        BridgE.uix_up( width, height, bgnas );
         return OK;
     }
 }
@@ -101,12 +101,15 @@ public:
 
 public:
     JUNCTION_PROXY_GET_NAME
+    JUNCTION_PROXY_IS_DOCK
 
     virtual void proxy_wake( void ) override {
         _cin_th = std::jthread( &Cli::_cin_main, this );
     }
 
-    virtual status_t proxy_pass( std::string line_ ) override {
+    virtual status_t proxy_pass( 
+        IN   std::string    line_ 
+    ) override {
         return this->execute_and_print( line_ );
     }
 
@@ -117,7 +120,9 @@ protected:
     } _uix;
 
 public:
-    virtual status_t dock_uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) override {
+    virtual status_t dock_uix_frame( 
+        IN   const dock_uix_frame_args_t&   args_ 
+    ) override {
         return OK;
     }
 
