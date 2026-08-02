@@ -48,8 +48,6 @@ public:
         _capt.release();
     }
 
-    cv::Mat rgbaVisual;
-
 public:
     virtual status_t dock_uix_frame( 
         IN   const dock_uix_frame_args_t&   args_
@@ -80,6 +78,8 @@ public:
     JUNCTION_PROXY_GET_NAME
 
     virtual void proxy_wake( void ) override {
+        BridgE.decl_uix_bound( { .bgnas = rgh::Immersive::Maximize } );
+
         auto dock = rgh::HVec< Topdon_TC001 >::make();
         dock->open( "/dev/video2" ); 
         BridgE.install_dock( "topdon-TC001", dock );

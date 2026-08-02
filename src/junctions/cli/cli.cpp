@@ -41,18 +41,20 @@ public:
         { .sh0rt = 'M', .l0ng = "maximize"}
     },
     .fnc = [ this ] ( auto& C ) -> status_t {
-        int  width  = 680;
-        int  height = 680;
-        auto bgnas  = rgh::Immersive::SrfBeginAs_Default;
+        int   width  = 680;
+        int   height = 680;
+        float font_scale = 1.22f;
+        auto  bgnas  = rgh::Immersive::Default;
 
         RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
             case 'w': width = C.i32(); break;
             case 'h': height = C.i32(); break;
-            case 'm': bgnas = rgh::Immersive::SrfBeginAs_Iconify; break;
-            case 'M': bgnas = rgh::Immersive::SrfBeginAs_Maximize; break;
+            case 'f': font_scale = C.f32(); break;
+            case 'm': bgnas = rgh::Immersive::Iconify; break;
+            case 'M': bgnas = rgh::Immersive::Maximize; break;
         RGH_FASTCLI_OPT_SWITCH_END
 
-        BridgE.uix_up( width, height, bgnas );
+        BridgE.uix_up( { width, height, font_scale, bgnas } );
         return OK;
     }
 }

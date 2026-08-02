@@ -35,6 +35,7 @@
 
 #define JUNCTION_PROXY_GET_NAME \
     virtual std::string_view proxy_get_name() const override { return JUNCTION_NAME; }
+
 #define JUNCTION_PROXY_IS_DOCK \
     virtual Dock* proxy_as_dock() override { return static_cast< Dock* >( this ); }
 
@@ -50,9 +51,7 @@
 
 typedef   rgh::status_t   status_t;
 
-/*
-# DETAILS: The dock is the tool itself.
-*/
+
 class Dock {
 public: friend class Bridge;
 
@@ -67,10 +66,10 @@ public:
     };
 
 public:
-    virtual std::unique_ptr< UIX_pack > dock_uix_begin     ()                                           { return nullptr; }
-    virtual status_t                    dock_uix_frame     ( const dock_uix_frame_args_t& args_ )       { return OK; }
-    virtual void                        dock_uix_end       ()                                           { return; }
-    virtual const bool                  dock_uix_persistent()                                     const { return false; }
+    virtual std::unique_ptr< UIX_pack > dock_uix_begin() { return nullptr; }
+    virtual status_t dock_uix_frame( const dock_uix_frame_args_t& args_ ) { return OK; }
+    virtual void  dock_uix_end() { return; }
+    virtual const bool dock_uix_persistent() const { return false; }
 };
 
 class Proxy {
@@ -93,12 +92,18 @@ public:
         int      wcnt   = 4;
     };
 
-public:
-    Bridge( void ) : rgh::bridge_t{ CLITOR_VERSION_STR } {
-        logger->info( "bridge: init ok." );
-    }
+    struct uix_up_args_t {
+        int                     width      = 512;
+        int                     height     = 256;
+        float                   font_scale = 1.22f;
+        rgh::Immersive::Word_   bgnas      = rgh::Immersive::Default;
+    };
 
 protected:
+    struct _config_t {
+        bool   uix_bound   = false;
+    };
+
     struct _proxy_entry_t {
         rgh::HVec< Proxy >   ref   = nullptr;
 
@@ -115,6 +120,14 @@ protected:
 
         auto operator->() const { return ref.operator->(); }
     };
+  
+public:
+    Bridge( void ) : rgh::bridge_t{ CLITOR_VERSION_STR } {
+        logger->info( "bridge: init ok." );
+    }
+
+protected:
+    _config_t   _config   = {};                                      
 
     rgh::Dispenser< std::map< std::string, _proxy_entry_t > >   _proxy_tbl   = { rgh::DispenserMode_Lock };
     rgh::Dispenser< std::map< std::string, _dock_entry_t > >    _dock_tbl    = { rgh::DispenserMode_Lock };
@@ -122,6 +135,26 @@ protected:
     struct _specprox_tbl_t {
         rgh::HVec< Proxy >   cli   = nullptr;
     } _specprox_tbl;
+
+public:
+    status_t decl_uix_bound( 
+        IN   const uix_up_args_t&   args_ 
+    ) {
+        ASSERT_OR( daemon_is_started() ) {
+            logger->error( "bridge: decl uix bound: bad callsite." );
+            return ERR_CALLSITE;
+        }
+
+        logger->info( "bridge: decl uix bound: declared." );
+        ASSERT_AND( not _config.uix_bound ) {
+            _config.uix_bound = true;
+            uix_up( args_ );
+        } else {
+            logger->warn( "bridge: decl uix bound: extra call, ignoring." );
+        }
+
+        return OK;
+    }
 
 #pragma region DAEMON
 public:
@@ -313,9 +346,7 @@ public:
         ASSERT_OR( itr != dock_tbl->end() ) return OK;
     
     //# Release any references pointing to this dock entry.
-        if( _uix ) {
-            if( _uix->focus == &itr->second ) _uix->focus = nullptr;
-        }
+        uix_unfocus( itr->first );
         
     //# Erase the entry.
         dock_tbl->erase( itr );
@@ -329,36 +360,29 @@ public:
 #pragma region UIX
 protected:
     struct _uix_t {
-        rgh::HVec< rgh::Immersive >   imm      = rgh::HVec< rgh::Immersive >::make();
-        _dock_entry_t*                focus    = nullptr;
-        std::jthread                  imm_th   = {};
+        std::shared_ptr< rgh::Immersive >               imm      = std::make_shared< rgh::Immersive >();
+        std::pair< std::string_view, _dock_entry_t* >   focus    = {};
+        std::jthread                                    imm_th   = {};
     };
-    std::unique_ptr< _uix_t >   _uix   = nullptr;
+    std::shared_ptr< _uix_t >   _uix   = nullptr;
 
 public:
     void uix_up( 
-        IN   int                           width_,
-        IN   int                           height_,
-        IN   rgh::Immersive::SrfBeginAs_   bgnas_
+        IN   const uix_up_args_t&   args_
     ) {
     //# Load or reload the UIX.
-        ASSERT_OR( not uix_is_up() ) uix_down();
-        _uix = std::make_unique< _uix_t >();
-
-    //# Notify active docks to load their UIX stuff.
-        for( auto& [ id, dock ] : *_dock_tbl.control() ) {
-            dock.uix.pack = dock->dock_uix_begin();
-        }
+        ASSERT_OR( not _uix ) uix_down();
+        _uix = std::make_shared< _uix_t >();
 
     //# Launch the UIX thread.
         _uix->imm_th = std::jthread( &rgh::Immersive::main, _uix->imm.get(), 0, nullptr, rgh::Immersive::config_t{
             .ctx        = nullptr,
             .title      = CLITOR_VERSION_STR,
-            .width      = width_,
-            .height     = height_,
-            .srf_bgn_as = bgnas_,
-            .init_cb    = [ this ] ( const auto& args_ ) -> auto {
-/* Cyberpunk theme from: https://github.com/ocornut/imgui/issues/707 */
+            .width      = args_.width,
+            .height     = args_.height,
+            .srf_bgn_as = args_.bgnas,
+            .init_cb    = [ this, fs = args_.font_scale ] ( const auto& args_ ) {
+//# Cyberpunk theme from: https://github.com/ocornut/imgui/issues/707 
 #pragma region UIX_Theme
                 ImGuiStyle& style = *_uix->imm->imgui.stl;
                 ImVec4* colors = style.Colors;
@@ -424,31 +448,47 @@ public:
 
                 colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
 #pragma endregion UIX_Theme        
-                _uix->imm->imgui.io->FontGlobalScale = 1.22f;
+                _uix->imm->imgui.io->FontGlobalScale = fs;
                 _uix->imm->disengage_face_culling();   
+
+            //# Notify active docks to load their UIX stuff.
+                logger->info( "bridge: uix up: notifying docks..." );
+                for( auto& [ id, dock ] : *_dock_tbl.control() ) {
+                    dock.uix.pack = dock->dock_uix_begin();
+                }
+                logger->info( "bridge: uix up: docks notified." );
+
                 return OK;
             },
-            .loop_cb    = [ this ] ( const auto& args_ ) -> auto { 
+            .loop_cb    = [ this ] ( const auto& args_ ) { 
                 return this->_uix_frame( args_ );
             },
-            .exit_cb    = [ this ] ( const auto& args_ ) -> auto { 
+            .exit_cb    = [ this ] ( const auto& args_ ) { 
+                if( _config.uix_bound ) push( [ this ] { daemon_stop(); } );
                 return OK;
             }
         } );
     }
 
     void uix_down( void ) {
-        ASSERT_OR( _uix ) return;
+        auto uix = std::move( _uix );
+        ASSERT_OR( uix ) return;
+    
+    //# Notify active docks to unload their UIX stuff.
+        logger->info( "bridge: uix down: notifying docks..." );
+        for( auto& [ id, dock ] : *_dock_tbl.control() ) {
+            dock->dock_uix_end();
+        }
+        logger->info( "bridge: uix down: docks notified." );
         
-        _uix->imm->sig_main_exit();
-        _uix.reset();
+        uix->imm->sig_main_exit();
     }
 
     status_t uix_focus(
         IN   const std::string&   id_
     ) {
     //# Assert that UIX is up.
-        ASSERT_OR( _uix ) return ERR_NO_RESOLVE;
+        auto uix = _uix; ASSERT_OR( uix ) return ERR_NO_RESOLVE;
 
     //# Acquire control over the dock table and set the UIX focus.
         auto dock_tbl = _dock_tbl.control();
@@ -456,13 +496,30 @@ public:
         auto itr = dock_tbl->find( id_ );
         ASSERT_OR( itr != dock_tbl->end() ) return ERR_NOT_FOUND;
         
-        _uix->focus = &itr->second;
+        uix->focus = { itr->first, &itr->second };
         return OK;
     }
 
-    bool uix_is_up( void ) { return (bool)_uix; }
-    rgh::Immersive* uix_imm_weak( void ) { return _uix ? _uix->imm.get() : nullptr; }
-    operator rgh::Immersive* ( void ) { return _uix ? _uix->imm.get() : nullptr; }
+    status_t uix_unfocus(
+        IN   std::string_view   id_   = ""
+    ) {
+    //# Assert that UIX is up.
+        auto uix = _uix; ASSERT_OR( uix ) return ERR_NO_RESOLVE;
+
+        if( id_.empty() || id_ == _uix->focus.first ) _uix->focus = { {}, nullptr };
+        return OK;
+    }
+
+    bool uix_is_up() { return _uix.use_count() > 0; }
+
+    std::shared_ptr< rgh::Immersive > uix_imm_strong() { 
+        auto uix = _uix; 
+        ASSERT_OR( uix ) return nullptr;
+        return uix->imm; 
+    }
+
+    rgh::Immersive* uix_imm_weak() { return _uix->imm.get(); }
+    operator rgh::Immersive*() { return uix_imm_weak(); }
 
 protected:
     RGH_inline status_t _uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) {
@@ -472,13 +529,12 @@ protected:
         ImGui::SetNextWindowPos( viewport->WorkPos );
         ImGui::SetNextWindowSize( viewport->WorkSize );
 
-        if( not _uix->focus ) {
+        if( not _uix->focus.second ) {
             ImGui::Begin( CLITOR_VERSION_STR, nullptr, 
                 ImGuiWindowFlags_NoDecoration          |
                 ImGuiWindowFlags_NoMove                |
                 ImGuiWindowFlags_NoResize              |  
-                ImGuiWindowFlags_NoSavedSettings       |
-                ImGuiWindowFlags_NoBringToFrontOnFocus
+                ImGuiWindowFlags_NoSavedSettings
             );
 
             if( ImGui::BeginTable( "##proxy-dock-split", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV ) ) {
@@ -510,10 +566,15 @@ protected:
 
                         bool tab_open = true;
                         if( ImGui::BeginTabItem( id.c_str(), dock->dock_uix_persistent() ? nullptr : &tab_open ) ) {
+                            if( rgh::Immersive::was_dbl_clk() ) {
+                                _uix->focus = { id, const_cast< _dock_entry_t* >( &dock ) };
+                            }
+
                             ImGui::BeginChild( "##dock_frame", ImVec2{ 0, -ImGui::GetFrameHeightWithSpacing() }, ImGuiChildFlags_Border );
                                 dock->dock_uix_frame( { args_, dock.uix.pack.get() } );
                             ImGui::EndChild(); ImGui::EndTabItem();
                         }
+                        
                         if( not tab_open ) this->push( [ this, id ] { this->uninstall_dock( id ); } );
 
                         ImGui::PopID();
@@ -526,19 +587,21 @@ protected:
             }
 
             ImGui::Separator();
-            ImGui::Text( "COMMAND" ); 
         } else {
             bool focused = true;
+            auto focus   = _uix->focus;
 
-            ImGui::Begin( CLITOR_VERSION_STR, &focused, 
-                ImGuiWindowFlags_NoMove                |
-                ImGuiWindowFlags_NoResize              |  
-                ImGuiWindowFlags_NoSavedSettings       |
-                ImGuiWindowFlags_NoBringToFrontOnFocus
+            ImGui::Begin( focus.first.cbegin(), &focused, 
+                ImGuiWindowFlags_NoMove          |
+                ImGuiWindowFlags_NoResize        |  
+                ImGuiWindowFlags_NoSavedSettings |
+                ImGuiWindowFlags_NoCollapse
             );
 
             auto dock_tbl = _dock_tbl.watch();
-            _uix->focus->ref->dock_uix_frame( { args_, _uix->focus->uix.pack.get() } );
+            focus.second->ref->dock_uix_frame( { args_, focus.second->uix.pack.get() } );
+
+            if( not focused ) _uix->focus = { {}, nullptr };
         }
 
         ImGui::End();
