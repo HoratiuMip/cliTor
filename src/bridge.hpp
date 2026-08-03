@@ -35,18 +35,31 @@
 
 #define JUNCTION_PROXY_GET_NAME \
     virtual std::string_view proxy_get_name() const override { return JUNCTION_NAME; }
-
 #define JUNCTION_PROXY_IS_DOCK \
     virtual Dock* proxy_as_dock() override { return static_cast< Dock* >( this ); }
+#define JUNCTION_PROXY_PASS_FNC_SIG \
+    virtual status_t proxy_pass( std::string line_ ) override
 
 #define JUNCTION_DOCK_GET_ID_FNC_SIG \
     virtual std::string_view dock_get_id() const noexcept
+#define JUNCTION_DOCK_UIX_BEGIN_FNC_SIG \
+    virtual std::shared_ptr< ::Dock::UIX_pack > dock_uix_begin() override
+#define JUNCTION_DOCK_UIX_FRAME_FNC_SIG \
+    virtual status_t dock_uix_frame( \
+        IN   const dock_uix_frame_args_t&   args_ \
+    ) override
+
+#define JUNCTION_DOCK_UIX_REINTR_PACK( pack_t_ ) auto* pack = reinterpret_cast< pack_t_* >( args_.pack );
 
 #define JUNCTION_DOCK_STOP_OR_BRIDGE_STOP \
     (this->dock_stop_signaled() or BridgE.status() != OK)
 
 #define JUNCTION_DOCK_IS_UIX_PERSISTENT \
     virtual const bool dock_uix_persistent() const override { return true; }
+
+#define JUNCTION_DOCK_WITH_BRIDGE_IMM_AND_UIX_PACK( pack_t_ ) \
+    auto imm = BridgE.uix_imm_strong(); auto _raw_uix_pack = this->_uix_pack; auto uix_pack = reinterpret_cast< pack_t_* >( _raw_uix_pack.get() ); \
+    ASSERT_AND( imm and uix_pack )
 
 
 typedef   rgh::status_t   status_t;
@@ -57,7 +70,7 @@ public: friend class Bridge;
 
 public:
     class UIX_pack {
-        public: virtual ~UIX_pack() = 0;
+        public: virtual ~UIX_pack() = default;
     };
 
 public:
@@ -66,10 +79,14 @@ public:
     };
 
 public:
-    virtual std::unique_ptr< UIX_pack > dock_uix_begin() { return nullptr; }
+    virtual std::shared_ptr< UIX_pack > dock_uix_begin() { return nullptr; }
     virtual status_t dock_uix_frame( const dock_uix_frame_args_t& args_ ) { return OK; }
     virtual void  dock_uix_end() { return; }
     virtual const bool dock_uix_persistent() const { return false; }
+
+protected:
+    std::shared_ptr< UIX_pack >   _uix_pack   = nullptr;
+
 };
 
 class Proxy {
@@ -111,12 +128,7 @@ protected:
     };
 
     struct _dock_entry_t {
-        struct uix_t {
-            std::unique_ptr< Dock::UIX_pack >   pack   = nullptr;
-        };
-
         rgh::HVec< Dock >   ref   = nullptr;
-        uix_t               uix   = {};
 
         auto operator->() const { return ref.operator->(); }
     };
@@ -284,7 +296,7 @@ public:
         auto proxy_tbl = _proxy_tbl.control();
         
         ASSERT_OR( proxy_tbl ) {
-            logger->error( "bridge: uninstall proxy (\"{}\"): bad table control.", pn_ );
+            logger->error( "bridge: uninstall proxy ({}): bad table control.", pn_ );
             return ERR_BUSY;
         }
 
@@ -293,6 +305,25 @@ public:
 
         logger->info( "bridge: uninstalled proxy: \"{}\".", pn_ );
         return OK;
+    }
+
+    status_t proxy_pass(
+        IN   const std::string&   pn_,
+        IN   std::string          line_
+    ) {
+        auto proxy_tbl = _proxy_tbl.control();
+        ASSERT_OR( proxy_tbl ) {
+            logger->error( "bridge: proxy pass ({}): bad table lock.", pn_ );
+            return ERR_BUSY;
+        }
+
+        auto proxy = proxy_tbl->find( pn_ ); 
+        ASSERT_OR( proxy != proxy_tbl->end() ) {
+            logger->error( "bridge: proxy pass: no such proxy: {}.", pn_ );
+            return ERR_NOT_FOUND;
+        }
+
+        return proxy->second.ref->proxy_pass( std::move( line_ ) );
     }
 #pragma endregion PROXY
 
@@ -325,6 +356,10 @@ public:
             return ERR_WOULD_OVRWR; 
         }
 
+        if( auto imm = uix_imm_strong(); imm ) {
+            dock_->_uix_pack = dock_->dock_uix_begin();
+        }
+
         dock.ref = std::move( dock_ );
         dock_tbl.release();
 
@@ -347,6 +382,11 @@ public:
     
     //# Release any references pointing to this dock entry.
         uix_unfocus( itr->first );
+
+        if( auto imm = uix_imm_strong(); imm ) {
+            itr->second.ref->dock_uix_end();
+            itr->second.ref->_uix_pack.reset();
+        }
         
     //# Erase the entry.
         dock_tbl->erase( itr );
@@ -447,6 +487,8 @@ public:
                 colors[ImGuiCol_NavHighlight] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
 
                 colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
+
+                colors[ImGuiCol_TableBorderStrong] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
 #pragma endregion UIX_Theme        
                 _uix->imm->imgui.io->FontGlobalScale = fs;
                 _uix->imm->disengage_face_culling();   
@@ -454,7 +496,7 @@ public:
             //# Notify active docks to load their UIX stuff.
                 logger->info( "bridge: uix up: notifying docks..." );
                 for( auto& [ id, dock ] : *_dock_tbl.control() ) {
-                    dock.uix.pack = dock->dock_uix_begin();
+                    dock->_uix_pack = dock->dock_uix_begin();
                 }
                 logger->info( "bridge: uix up: docks notified." );
 
@@ -552,7 +594,9 @@ protected:
                     ImGui::PushID( proxy_id );
 
                     if( ImGui::Selectable( proxy.first.c_str() ) ) {
-
+                        push( [ this, pn = proxy.first ] {
+                            proxy_pass( pn, "install" );
+                        } );
                     }
 
                     ImGui::PopID();
@@ -571,11 +615,11 @@ protected:
                             }
 
                             ImGui::BeginChild( "##dock_frame", ImVec2{ 0, -ImGui::GetFrameHeightWithSpacing() }, ImGuiChildFlags_Border );
-                                dock->dock_uix_frame( { args_, dock.uix.pack.get() } );
+                                dock->dock_uix_frame( { args_, dock->_uix_pack.get() } );
                             ImGui::EndChild(); ImGui::EndTabItem();
                         }
                         
-                        if( not tab_open ) this->push( [ this, id ] { this->uninstall_dock( id ); } );
+                        if( not tab_open ) push( [ this, id ] { uninstall_dock( id ); } );
 
                         ImGui::PopID();
                     }
@@ -599,7 +643,7 @@ protected:
             );
 
             auto dock_tbl = _dock_tbl.watch();
-            focus.second->ref->dock_uix_frame( { args_, focus.second->uix.pack.get() } );
+            focus.second->ref->dock_uix_frame( { args_, focus.second->ref->_uix_pack.get() } );
 
             if( not focused ) _uix->focus = { {}, nullptr };
         }
