@@ -1,4 +1,6 @@
 #include <opencv2/opencv.hpp>
+
+#include <rgh/gep/tempo.hpp>
 #include <rgh/osp/IO_utils.hpp>
 #include <rgh/osp/imm_widgets.hpp>
 
@@ -36,10 +38,17 @@ public:
         std::atomic< mM_tmp_t >   mM_tmp   = {};
     } proc_res;
 
-    inline static constexpr int   COLORMAPS[]   = {
-        cv::COLORMAP_INFERNO, cv::COLORMAP_BONE, cv::COLORMAP_JET, cv::COLORMAP_OCEAN, cv::COLORMAP_VIRIDIS 
+    inline static constexpr std::pair< int, int >   COLORMAPS[]   = {
+        { cv::COLORMAP_PLASMA,  ImPlotColormap_Plasma },
+        { cv::COLORMAP_BONE,    ImPlotColormap_Greys },
+        { cv::COLORMAP_JET,     ImPlotColormap_Jet },
+        { cv::COLORMAP_COOL,    ImPlotColormap_Cool },
+        { cv::COLORMAP_VIRIDIS, ImPlotColormap_Viridis }
     };
     
+public:
+    rgh::Ticker_lap< std::chrono::steady_clock >   last_frame_ticker   = { rgh::ticker_epoch_init_t{} };
+
 protected:
     void _process_frames( std::stop_token stop_tok_ ) {
         while( not stop_tok_.stop_requested() ) {
@@ -51,6 +60,8 @@ protected:
             ASSERT_OR( frame.cols == FRAME_WIDTH and frame.rows == FRAME_HEIGHT*2 ) {
                 continue;
             }
+
+            last_frame_ticker.lap< float >();
 
             cv::Mat bot_half = frame( cv::Rect( 0, FRAME_HEIGHT, FRAME_WIDTH, FRAME_HEIGHT ) );
             if( not bot_half.isContinuous() ) bot_half = bot_half.clone();
@@ -71,7 +82,7 @@ protected:
 
                 cv::Mat gray_ch; cv::extractChannel( top_half, gray_ch, 0x0 );
 
-                cv::applyColorMap( gray_ch, top_half, COLORMAPS[ uix_pack->colormap.load( std::memory_order_relaxed ) ] );
+                cv::applyColorMap( gray_ch, top_half, COLORMAPS[ uix_pack->colormap.load( std::memory_order_relaxed ) ].first );
                 cv::cvtColor( top_half, top_half, cv::COLOR_BGR2RGBA );
 
                 imm->push_payload( { rgh::Immersive::payload_t::Verb_TexReld, 
@@ -145,6 +156,8 @@ public:
             if( selected_now ) BridgE.push( [ this, port ] { open( port->id ); } );
         }
 
+        auto mM_tmp = proc_res.mM_tmp.load( std::memory_order_relaxed );
+
         ImGui::SeparatorText( "Video feed" ); ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical ); ImGui::SameLine();
 
         if( ImGui::BeginTable( "##vid-feed-tbl", 3, ImGuiTableFlags_Borders ) ) {
@@ -154,7 +167,12 @@ public:
 
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
+                auto feed_pos = rgh::Immersive::here();
+            
                 ImGui::Image( ( ImTextureID )pack->tex.get(), ImVec2( FRAME_WIDTH*2, FRAME_HEIGHT*2 ) );
+                ImGui::SameLine();
+                rgh::Immersive::chpt_here();
+
                 if( auto scrl = rgh::Immersive::io().MouseWheel; ImGui::IsItemHovered() and scrl != 0 ) {
                     auto colormap = pack->colormap.load( std::memory_order_relaxed );
 
@@ -162,9 +180,22 @@ public:
                     else pack->colormap.store( colormap-1 < 0 ? std::size( COLORMAPS )-1 : colormap-1 );
                 }
 
-            ImGui::TableNextColumn();
-                auto mM_tmp = proc_res.mM_tmp.load( std::memory_order_relaxed );
+                if( last_frame_ticker.peek_lap< float >() >= 3 ) {
+                    rgh::Immersive::movxy( feed_pos, { FRAME_WIDTH - 36, FRAME_HEIGHT - 36 } );
+                    ImSpinner::SpinnerAngTriple(
+                        "##vid-feed-to", 24, 30, 36, 3, ImSpinner::white, ImSpinner::red, ImSpinner::white, 3
+                    );
+                    rgh::Immersive::chpt_return();
+                }
 
+                auto colormap = COLORMAPS[ pack->colormap.load( std::memory_order_relaxed ) ];
+                ImPlot::ColormapScale( 
+                    "##data-scl", mM_tmp.mtmp, mM_tmp.Mtmp, { 0, FRAME_HEIGHT*2 }, "%.0f", 
+                    ImPlotColormapScaleFlags_NoLabel | ( colormap.second == ImPlotColormap_Greys ? ImPlotColormapScaleFlags_Invert : 0 ),
+                    colormap.second
+                );
+
+            ImGui::TableNextColumn();
                 ImGui::BulletText( "Min:" ); ImGui::SameLine();
                 rgh::Immersive::scale_font( 1.5 );
                     ImGui::SetNextItemWidth( 120 );
@@ -192,10 +223,6 @@ public:
 
 public:
     JUNCTION_PROXY_GET_NAME
-
-    virtual void proxy_wake( void ) override {
-        
-    }
 
     JUNCTION_PROXY_PASS_FNC_SIG {
         switch( rgh::txt_hash( line_ ) ) {

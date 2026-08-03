@@ -39,6 +39,8 @@
     virtual Dock* proxy_as_dock() override { return static_cast< Dock* >( this ); }
 #define JUNCTION_PROXY_PASS_FNC_SIG \
     virtual status_t proxy_pass( std::string line_ ) override
+#define JUNCTION_PROXY_WAKE_FNC_SIG \
+    virtual void proxy_wake() override
 
 #define JUNCTION_DOCK_GET_ID_FNC_SIG \
     virtual std::string_view dock_get_id() const noexcept
@@ -48,6 +50,8 @@
     virtual status_t dock_uix_frame( \
         IN   const dock_uix_frame_args_t&   args_ \
     ) override
+#define JUNCTION_DOCK_UIX_END_FNC_SIG \
+    virtual void dock_uix_end() override
 
 #define JUNCTION_DOCK_UIX_REINTR_PACK( pack_t_ ) auto* pack = reinterpret_cast< pack_t_* >( args_.pack );
 
@@ -489,6 +493,7 @@ public:
                 colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
 
                 colors[ImGuiCol_TableBorderStrong] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
+                colors[ImGuiCol_TableBorderLight] = ImVec4(1.00f, 0.93f, 0.04f, 0.64f);
 #pragma endregion UIX_Theme        
                 _uix->imm->imgui.io->FontGlobalScale = fs;
                 _uix->imm->disengage_face_culling();   
