@@ -5,7 +5,8 @@
 # Quintessential junctions - yes, yes, like the anime.
     # The built-in command line interpreter.
     add_junction( cli )
-
+    # Modbus RTU & TCP tool.
+    add_junction( modbus )
 # Base:
 
 # Specific junctions - ready-to-use tools for specific device or use case.
@@ -13,4 +14,4 @@
     add_junction( topdon-TC001 )
 
 # Contract junctions - closed source or client apps.
-add_junction( charge-watch )
+# add_junction( charge-watch )

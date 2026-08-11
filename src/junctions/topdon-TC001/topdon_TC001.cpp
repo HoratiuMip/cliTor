@@ -7,8 +7,9 @@
 #include <bridge.hpp>
 JUNCTION_HEADER( topdon_TC001, "topdon-TC001" )
 
-constexpr int   FRAME_WIDTH    = 256;
-constexpr int   FRAME_HEIGHT   = 192;
+constexpr int     FRAME_WIDTH          = 256;
+constexpr int     FRAME_HEIGHT         = 192;
+constexpr float   VIDEO_FEED_UPSCALE   = 2.f;
 
 class Topdon_TC001 : public Dock {
 public:
@@ -169,7 +170,9 @@ public:
             ImGui::TableNextColumn();
                 auto feed_pos = rgh::Immersive::here();
             
-                ImGui::Image( ( ImTextureID )pack->tex.get(), ImVec2( FRAME_WIDTH*2, FRAME_HEIGHT*2 ) );
+                ImGui::Image( ( ImTextureID )pack->tex.get(), ImVec2( FRAME_WIDTH, FRAME_HEIGHT )*VIDEO_FEED_UPSCALE );
+                ImGui::SetItemTooltip( "%f", (ImGui::GetMousePos() - ImGui::GetItemRectMin()).x );
+
                 ImGui::SameLine();
                 rgh::Immersive::chpt_here();
 
@@ -190,7 +193,7 @@ public:
 
                 auto colormap = COLORMAPS[ pack->colormap.load( std::memory_order_relaxed ) ];
                 ImPlot::ColormapScale( 
-                    "##data-scl", mM_tmp.mtmp, mM_tmp.Mtmp, { 0, FRAME_HEIGHT*2 }, "%.0f", 
+                    "##data-scl", mM_tmp.mtmp, mM_tmp.Mtmp, { 0, FRAME_HEIGHT*VIDEO_FEED_UPSCALE }, "%.0f", 
                     ImPlotColormapScaleFlags_NoLabel | ( colormap.second == ImPlotColormap_Greys ? ImPlotColormapScaleFlags_Invert : 0 ),
                     colormap.second
                 );
@@ -219,16 +222,11 @@ public:
 
 class Proxy : public ::Proxy {
 public:
-    int   next_dock_id   = 0x0;
-
-public:
     JUNCTION_PROXY_GET_NAME
 
     JUNCTION_PROXY_PASS_FNC_SIG {
         switch( rgh::txt_hash( line_ ) ) {
-            case rgh::txt_hash( "install" ): {
-                BridgE.install_dock( std::format( "{}-{}", JUNCTION_NAME, next_dock_id++ ), rgh::HVec< Topdon_TC001 >::make() );
-                break; }
+            JUNCTION_PROXY_PASS_BASIC_DOCK_INSTALL( Topdon_TC001 )
 
             default: return ERR_NO_RESOLVE;
         }

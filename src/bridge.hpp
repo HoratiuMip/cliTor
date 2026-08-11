@@ -13,6 +13,7 @@
 #include <rgh/osp/thread_pool.hpp>
 #include <rgh/osp/immersive.hpp>
 
+#include <spdlog/sinks/base_sink.h>
 
 #define CLITOR_VERSION_MAJOR 1
 #define CLITOR_VERSION_MINOR 0
@@ -41,9 +42,16 @@
     virtual status_t proxy_pass( std::string line_ ) override
 #define JUNCTION_PROXY_WAKE_FNC_SIG \
     virtual void proxy_wake() override
+#define JUNCTION_PROXY_PASS_BASIC_DOCK_INSTALL( dock_t_ ) \
+    case rgh::txt_hash( "install" ): { \
+        static int _next_dock_id = 0; \
+        BridgE.install_dock( std::format( "{}-{}", JUNCTION_NAME, _next_dock_id++ ), rgh::HVec< dock_t_ >::make() ); \
+        break; }
 
 #define JUNCTION_DOCK_GET_ID_FNC_SIG \
     virtual std::string_view dock_get_id() const noexcept
+#define JUNCTION_DOCK_PASS_FNC_SIG \
+    virtual status_t dock_pass( std::string line_ ) override 
 #define JUNCTION_DOCK_UIX_BEGIN_FNC_SIG \
     virtual std::shared_ptr< ::Dock::UIX_pack > dock_uix_begin() override
 #define JUNCTION_DOCK_UIX_FRAME_FNC_SIG \
@@ -52,6 +60,10 @@
     ) override
 #define JUNCTION_DOCK_UIX_END_FNC_SIG \
     virtual void dock_uix_end() override
+
+#define JUNCTION_DOCK_LOGI( ... ) _dock_logger->info( __VA_ARGS__ )
+#define JUNCTION_DOCK_LOGW( ... ) _dock_logger->warn( __VA_ARGS__ )
+#define JUNCTION_DOCK_LOGE( ... ) _dock_logger->error( __VA_ARGS__ )
 
 #define JUNCTION_DOCK_UIX_REINTR_PACK( pack_t_ ) auto* pack = reinterpret_cast< pack_t_* >( args_.pack );
 
@@ -72,19 +84,26 @@ typedef   rgh::status_t   status_t;
 class Dock {
 public: friend class Bridge;
 
+protected:
+    std::shared_ptr< spdlog::logger >   _dock_logger   = nullptr;
+    std::string                         _dock_id       = {};
+
+public:
+    std::string dock_id( void ) const { return _dock_id; }
+    virtual status_t dock_pass( std::string line_ ) { return ERR_NOT_IMPL; }
+
 public:
     class UIX_pack {
         public: virtual ~UIX_pack() = default;
     };
 
-public:
     struct dock_uix_frame_args_t : rgh::Immersive::frame_cb_args_t {
         UIX_pack*   pack   = nullptr;
     };
 
 public:
     virtual std::shared_ptr< UIX_pack > dock_uix_begin() { return nullptr; }
-    virtual status_t dock_uix_frame( const dock_uix_frame_args_t& args_ ) { return OK; }
+    virtual status_t dock_uix_frame( const dock_uix_frame_args_t& args_ ) { return ERR_NOT_IMPL; }
     virtual void  dock_uix_end() { return; }
     virtual const bool dock_uix_persistent() const { return false; }
 
@@ -138,7 +157,7 @@ protected:
     };
   
 public:
-    Bridge( void ) : rgh::bridge_t{ CLITOR_VERSION_STR } {
+    Bridge( void ) : rgh::bridge_t{ "cliTor" } {
         logger->info( "bridge: init ok." );
     }
 
@@ -287,6 +306,10 @@ public:
         }
 
         proxy.ref = std::move( proxy_ );
+        if( auto dock = proxy.ref->proxy_as_dock(); dock ) {
+            this->install_dock( proxy.ref->proxy_get_name().cbegin(), rgh::HVec< Dock >{ rgh::hvec_weak_ptr_t{ dock } } );
+        }
+
         proxy_tbl.release();
 
         logger->info( "bridge: installed proxy: \"{}\".", pn );
@@ -332,9 +355,41 @@ public:
 #pragma endregion PROXY
 
 #pragma region DOCK
+protected:
+    void _dock_entry_set_id(
+        IN   _dock_entry_t&   dken_,
+        IN   std::string            id_
+    ) {
+        Dock& dock = *dken_.ref;
+
+        dock._dock_id = std::move( id_ ); 
+    }
+
+    void _dock_entry_make_logger(
+        IN   _dock_entry_t&   dken_
+    ) {
+        Dock& dock = *dken_.ref;
+
+        dock._dock_logger = std::make_shared< spdlog::logger >( dock._dock_id, this->get_logger_sink() );
+        dock._dock_logger->set_pattern( RGH_SPDLOG_PATTERN );
+    }
+
+    void _dock_entry_load_uix(
+        IN   _dock_entry_t&   dken_
+    ) {
+        auto imm = uix_imm_strong();
+        ASSERT_OR( imm ) return;
+        
+        Dock& dock = *dken_.ref;
+
+        dock._uix_pack = dock.dock_uix_begin();
+    }
+
 public:
+//# Install a dock in the bridge with the given ID. 
+//# Note that IDs must be unique.
     status_t install_dock(
-        IN   std::string           did_,
+        IN   std::string           id_,
         IN   rgh::HVec< Dock >&&   dock_
     ) {
     //# Check for a valid dock, i.e. valid pointer and non-empty ID.
@@ -342,42 +397,43 @@ public:
             logger->error( "bridge: install dock: null dock." );
             return ERR_BADARG;
         }
-        ASSERT_OR( not did_.empty() ) {
+        ASSERT_OR( not id_.empty() ) {
             logger->error( "bridge: install dock: empty name." );
             return ERR_BADARG;
         }
 
         auto dock_tbl = _dock_tbl.control();
         ASSERT_OR( dock_tbl ) {
-            logger->error( "bridge: install dock (\"{}\"): bad table control.", did_ );
+            logger->error( "bridge: install dock (\"{}\"): bad table control.", id_ );
             return ERR_BUSY;
         }
 
-        auto& dock = ( *dock_tbl )[ did_ ];
+        auto& dock = ( *dock_tbl )[ id_ ];
         ASSERT_OR( not dock.ref ) {
             dock_tbl.release();
-            logger->error( "bridge: install dock (\"{}\"): already installed.", did_ );
+            logger->error( "bridge: install dock (\"{}\"): already installed.", id_ );
             return ERR_WOULD_OVRWR; 
         }
-
-        if( auto imm = uix_imm_strong(); imm ) {
-            dock_->_uix_pack = dock_->dock_uix_begin();
-        }
-
+        
         dock.ref = std::move( dock_ );
+        _dock_entry_set_id( dock, std::move( id_ ) );
+        _dock_entry_make_logger( dock );
+        _dock_entry_load_uix( dock );
+
         dock_tbl.release();
 
-        logger->info( "bridge: installed dock: \"{}\".", did_ );
+        logger->info( "bridge: installed dock: \"{}\".", dock.ref->_dock_id );
         return OK;
     }
 
+//# Uninstall a dock from the bridge.
     status_t uninstall_dock(
         IN   const std::string&   id_
     ) {
-    //# Acquire control over the dock table and obtain the entry.
+    //# Acquire the dock table and obtain the entry.
         auto dock_tbl = _dock_tbl.control();
         ASSERT_OR( dock_tbl ) {
-            logger->error( "bridge: uninstall dock (\"{}\"): bad table control.", id_ );
+            logger->error( "bridge: uninstall dock (\"{}\"): bad table lock.", id_ );
             return ERR_BUSY;
         }
 
@@ -396,12 +452,58 @@ public:
         dock_tbl->erase( itr );
         dock_tbl.release();
 
+        spdlog::drop( id_ );
+
         logger->info( "bridge: uninstalled dock: \"{}\".", id_ );
         return OK;
     }
+
+//# Retrieve a strong reference to the dock having the given ID.
+    rgh::HVec< Dock > dock_by_id( 
+        IN   const std::string&   id_
+    ) {
+    //# Acquire the lock over the dock table, search for the entry and return it.
+        auto dock_tbl = _dock_tbl.control();
+        ASSERT_OR( dock_tbl ) {
+            logger->error( "bridge: dock by id: bad table lock." );
+            return nullptr;
+        }
+
+        auto dock_itr = dock_tbl->find( id_ ); 
+        ASSERT_OR( dock_itr != dock_tbl->end() ) {
+            logger->error( "bridge: dock by id: no such dock: {}.", id_ );
+            return nullptr;
+        }
+
+        return dock_itr->second.ref;
+    }
+
 #pragma endregion DOCK
 
 #pragma region UIX
+public:
+    status_t resink_logger( 
+        IN   spdlog::sink_ptr   sink_ 
+    ) {
+        rgh::BridgE.resink_logger( sink_ );
+        rgh::bridge_t::resink_logger( sink_ );
+        
+        auto dock_tbl = _dock_tbl.control();
+        ASSERT_OR( dock_tbl ) {
+            return ERR_BUSY;
+        }
+
+        for( auto& entry : *dock_tbl ) {
+            auto& dock_logger = entry.second.ref->_dock_logger;
+
+            spdlog::drop( dock_logger->name() );
+            dock_logger = std::make_shared< spdlog::logger >( dock_logger->name(), sink_ );
+            dock_logger->set_pattern( RGH_SPDLOG_PATTERN );
+        }
+
+        return OK;
+    }
+
 protected:
     struct _uix_t {
         std::shared_ptr< rgh::Immersive >               imm      = std::make_shared< rgh::Immersive >();
@@ -569,7 +671,7 @@ public:
     operator rgh::Immersive*() { return uix_imm_weak(); }
 
 protected:
-    RGH_inline status_t _uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) {
+    status_t _uix_frame( const rgh::Immersive::frame_cb_args_t& args_ ) {
         _uix->imm->clear();
 
         const auto* viewport = ImGui::GetMainViewport();
@@ -611,6 +713,7 @@ protected:
 
                 if( auto dock_tbl = _dock_tbl.watch(); ImGui::BeginTabBar( "##docks", ImGuiTabBarFlags_None ) ) {
                     int crtno = 0x0; for( auto& [ id, dock ] : *dock_tbl ) {
+                        ASSERT_OR( not dock.ref->dock_id().starts_with( '#' ) ) continue;
                         ImGui::PushID( crtno );
 
                         bool tab_open = true;
@@ -625,7 +728,6 @@ protected:
                         }
                         
                         if( not tab_open ) push( [ this, id ] { uninstall_dock( id ); } );
-
                         ImGui::PopID();
                     }
 
