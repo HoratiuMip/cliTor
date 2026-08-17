@@ -47,83 +47,19 @@ public:
     : _cli{
         {},
         { 
-{   .text = "exit",
-    .opts = {},
-    .fnc = [ this ] ( auto& C ) -> status_t {
-        BridgE.daemon_stop();
-        return OK;
-    }
-}, 
+#include "cmds/clear.inl"
+, 
+#include "cmds/exit.inl"
+, 
 
-{   .text = "pxp",
-    .opts = {
-        { .sh0rt = 'n', .l0ng = "name", .arg = rgh::Fast_cli::Arg_text, .fast_id = 0x0 },
-        { .sh0rt = 'l', .l0ng = "line", .arg = rgh::Fast_cli::Arg_text, .fast_id = 0x1 }
-    },
-    .fnc = [ this ] ( auto& C ) -> status_t {
-        std::string proxy_name = {};
-        std::string line       = {};
+#include "cmds/pxp.inl"
+,
+#include "cmds/install.inl"
+,
+#include "cmds/cd.inl"
+,
 
-        RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
-            case 'n': proxy_name = C.text(); break;
-            case 'l': line = C.text(); break;
-        RGH_FASTCLI_OPT_SWITCH_END
-
-        ASSERT_OR( !proxy_name.empty() && !line.empty() ) {
-            JUNCTION_DOCK_LOGE( "proxy pass: incomplete arguments." );
-            return ERR_PARTIAL;
-        }
-
-        BridgE.proxy_pass( proxy_name, std::move( line ) );
-        return OK;
-    }
-},
-
-{   .text = "cd",
-    .opts = {
-        { .sh0rt = 'i', .l0ng = "id", .arg = rgh::Fast_cli::Arg_text, .fast_id = 0x0 }
-    },
-    .fnc = [ this ] ( auto& C ) -> status_t {
-        rgh::HVec< Dock > cd = nullptr;
-
-        RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
-            case 'i': cd = BridgE.dock_by_id( C.text() ); break;
-        RGH_FASTCLI_OPT_SWITCH_END
-
-        ASSERT_OR( cd ) {
-            return ERR_NOT_FOUND;
-        }
-
-        _cd = std::move( cd );
-        return OK;
-    }
-},
-
-{   .text = "uix-up",
-    .opts = {
-        { .sh0rt = 'w', .l0ng = "width", .arg = rgh::Fast_cli::Arg_i32, .fast_id = 0x0 },
-        { .sh0rt = 'h', .l0ng = "height", .arg = rgh::Fast_cli::Arg_i32, .fast_id = 0x1 },
-        { .sh0rt = 'm', .l0ng = "minimize" },
-        { .sh0rt = 'M', .l0ng = "maximize"}
-    },
-    .fnc = [ this ] ( auto& C ) -> status_t {
-        int   width  = 680;
-        int   height = 680;
-        float font_scale = 1.22f;
-        auto  bgnas  = rgh::Immersive::Default;
-
-        RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
-            case 'w': width = C.i32(); break;
-            case 'h': height = C.i32(); break;
-            case 'f': font_scale = C.f32(); break;
-            case 'm': bgnas = rgh::Immersive::Iconify; break;
-            case 'M': bgnas = rgh::Immersive::Maximize; break;
-        RGH_FASTCLI_OPT_SWITCH_END
-
-        BridgE.uix_up( { width, height, font_scale, bgnas } );
-        return OK;
-    }
-}
+#include "cmds/uix_up.inl"
         }
     } {}
 
@@ -135,20 +71,17 @@ protected:
 
 protected:
     void _cin_main( void ) {
-        _rx.print( "\n" );
+        this->clear();
 
         std::string line = {}; 
-
-        JUNCTION_DOCK_LOGI( "waiting for commands..." );
-
         while( BridgE.daemon_is_started() ) {
             auto cd = _cd;
 
             const char* line = _rx.input( std::format( 
-                "\033[90m┌─────────────────────────────────────────────\n"
-                "\033[90m[\033[33m{}\033[90m] \033[36m>>> \033[m"
+                "\033[90m┌───────────────────────────────────────────────────┘\n"
+                "\033[90m└─ \033[33m{}\033[90m ── \033[36m>>> \033[m"
             ,
-                cd ? cd->dock_id() : "BridgE" 
+                cd ? cd->dock_id() : "BridgE"
             ) );
 
             ASSERT_OR( line ) break;
@@ -162,6 +95,16 @@ protected:
     }
 
 public:
+    void clear( void ) {
+        #include "logo.inl"
+    #ifdef RGH_TARGET_OS_LINUX
+        std::system( "clear" );
+    #elifdef RGH_TARGET_OS_WINDOWS
+        std::system( "cls" );
+    #endif
+        _rx.print( LOGO );
+    }
+
     status_t execute(
         IN   std::string   line_
     ) {
@@ -170,7 +113,7 @@ public:
         auto cd       = _cd;
         bool under_cd = static_cast< bool >( cd );
 
-        if( line_.starts_with( '\\' ) ) {
+        if( line_.starts_with( '/' ) ) {
             if( line_.size() == 1uz ) {
                 _cd.reset(); return OK;
             } else {
@@ -180,14 +123,14 @@ public:
         }
 
         switch( line_.at( 0x0uz ) ) {
-            case '\\': 
+            case '/': 
                 if( line_.size() == 1uz ) { _cd.reset(); return OK; }
 
                 line_.erase( 0x0uz, 1 );
                 under_cd = false;
             break;
 
-            case '/':
+            case '\\':
                 std::system( line_.c_str() + 1 );
                 return OK;
         }
@@ -202,7 +145,7 @@ public:
     JUNCTION_PROXY_GET_NAME
     JUNCTION_PROXY_IS_DOCK
 
-    JUNCTION_PROXY_WAKE_FNC_SIG{
+    JUNCTION_PROXY_WAKE_FNC_SIG {
         BridgE.resink_logger( std::make_shared< replxx_sink_t >( _rx ) );
 
         _cin_th = std::jthread( &Cli::_cin_main, this );
