@@ -45,23 +45,35 @@ class Cli : public Dock, public Proxy {
 public:
     Cli( void )
     : _cli{
-        {},
+        {
+            .when_man = [ this ] ( std::string_view cmd_, std::string_view man_ ) { 
+                JUNCTION_DOCK_LOGI( "manual for: {}:\n{}", cmd_, man_ ); 
+            }
+        },
         { 
-#include "cmds/clear.inl"
-, 
-#include "cmds/exit.inl"
-, 
+            #include "cmds/clear.inl"
+            , 
+            #include "cmds/exit.inl"
+            , 
 
-#include "cmds/pxp.inl"
-,
-#include "cmds/install.inl"
-,
-#include "cmds/cd.inl"
-,
+            #include "cmds/pxp.inl"
+            ,
+            #include "cmds/install.inl"
+            ,
+            #include "cmds/uninstall.inl"
+            ,
+            #include "cmds/cd.inl"
+            ,
 
-#include "cmds/uix_up.inl"
+            #include "cmds/uix_up.inl"
+            ,
+            #include "cmds/uix_down.inl"
         }
     } {}
+
+    ~Cli( void ) {
+        _rx.emulate_key_press( replxx::Replxx::KEY::control( 'C' ) );
+    }
 
 protected:
     rgh::Fast_cli       _cli      = {};
@@ -71,6 +83,19 @@ protected:
 
 protected:
     void _cin_main( void ) {
+        std::this_thread::sleep_for( std::chrono::seconds{ 1 } );
+        BridgE.resink_logger( std::make_shared< replxx_sink_t >( _rx ) );
+
+        _rx.bind_key( replxx::Replxx::KEY::control( 'C' ), [ this ] ( char32_t code_ ) {
+            return replxx::Replxx::ACTION_RESULT::BAIL;
+        } );
+        _rx.bind_key( replxx::Replxx::KEY::control( 'W' ), [ this ] ( char32_t code_ ) {
+            _rx.print( "\n" );
+            auto cd = std::move( _cd );
+            ASSERT_AND( cd ) BridgE.uninstall_dock( cd->dock_id() );
+            return replxx::Replxx::ACTION_RESULT::RETURN;
+        } );
+
         this->clear();
 
         std::string line = {}; 
@@ -146,8 +171,6 @@ public:
     JUNCTION_PROXY_IS_DOCK
 
     JUNCTION_PROXY_WAKE_FNC_SIG {
-        BridgE.resink_logger( std::make_shared< replxx_sink_t >( _rx ) );
-
         _cin_th = std::jthread( &Cli::_cin_main, this );
     }
 

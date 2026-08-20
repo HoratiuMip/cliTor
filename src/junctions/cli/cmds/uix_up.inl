@@ -1,7 +1,7 @@
 {   .text = "uix-up",
     .opts = {
-        { .sh0rt = 'w', .l0ng = "width", .arg = rgh::Fast_cli::Arg_i32, .fast_id = 0x0 },
-        { .sh0rt = 'h', .l0ng = "height", .arg = rgh::Fast_cli::Arg_i32, .fast_id = 0x1 },
+        { .sh0rt = 'w', .l0ng = "width", .arg = rgh::Fast_cli::argi32, .fast_id = 0x0 },
+        { .sh0rt = 'h', .l0ng = "height", .arg = rgh::Fast_cli::argi32, .fast_id = 0x1 },
         { .sh0rt = 'm', .l0ng = "minimize" },
         { .sh0rt = 'M', .l0ng = "maximize"}
     },

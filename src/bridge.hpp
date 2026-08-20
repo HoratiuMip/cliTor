@@ -267,6 +267,12 @@ protected:
     virtual status_t _daemon_stop(
         IN   void*   ctx_
     ) override {
+    {
+        auto dock_tbl = _dock_tbl.control(); ASSERT_AND( dock_tbl ) dock_tbl->clear();
+        auto proxy_tbl = _proxy_tbl.control(); ASSERT_AND( proxy_tbl ) proxy_tbl->clear();
+    }
+        _specprox_tbl.cli.reset();
+
     //# Kill the graphical user interface.
         uix_down();
 
@@ -711,8 +717,10 @@ protected:
         
                 ImGui::TableNextColumn();
 
-                if( auto dock_tbl = _dock_tbl.watch(); ImGui::BeginTabBar( "##docks", ImGuiTabBarFlags_None ) ) {
-                    int crtno = 0x0; for( auto& [ id, dock ] : *dock_tbl ) {
+                if( auto dock_tbl = _dock_tbl.watch(); ImGui::BeginTabBar( "##docks", ImGuiTabBarFlags_FittingPolicyScroll ) ) {
+                    int  crtno = 0x0; 
+
+                    for( auto& [ id, dock ] : *dock_tbl ) {
                         ASSERT_OR( not dock.ref->dock_id().starts_with( '#' ) ) continue;
                         ImGui::PushID( crtno );
 
@@ -725,9 +733,11 @@ protected:
                             ImGui::BeginChild( "##dock_frame", ImVec2{ 0, -ImGui::GetFrameHeightWithSpacing() }, ImGuiChildFlags_Border );
                                 dock->dock_uix_frame( { args_, dock->_uix_pack.get() } );
                             ImGui::EndChild(); ImGui::EndTabItem();
+
+                            tab_open = !rgh::Immersive::ctrl( ImGuiKey_W );
                         }
                         
-                        if( not tab_open ) push( [ this, id ] { uninstall_dock( id ); } );
+                        if( not tab_open ) { push( [ this, id ] { uninstall_dock( id ); } ); }
                         ImGui::PopID();
                     }
 

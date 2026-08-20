@@ -1,6 +1,6 @@
 {   .text = "cd",
     .opts = {
-        { .sh0rt = 'i', .l0ng = "id", .arg = rgh::Fast_cli::Arg_text, .fast_id = 0x0 }
+        { .sh0rt = 'i', .l0ng = "id", .arg = rgh::Fast_cli::argtext, .fast_id = 0x0 }
     },
     .fnc = [ this ] ( auto& C ) -> status_t {
         rgh::HVec< Dock > cd = nullptr;

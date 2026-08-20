@@ -1,7 +1,7 @@
 {   .text = "pxp",
     .opts = {
-        { .sh0rt = 'n', .l0ng = "name", .arg = rgh::Fast_cli::Arg_text, .fast_id = 0x0 },
-        { .sh0rt = 'l', .l0ng = "line", .arg = rgh::Fast_cli::Arg_text, .fast_id = 0x1 }
+        { .sh0rt = 'n', .l0ng = "name", .arg = rgh::Fast_cli::argtext, .fast_id = 0x0 },
+        { .sh0rt = 'l', .l0ng = "line", .arg = rgh::Fast_cli::argtext, .fast_id = 0x1 }
     },
     .fnc = [ this ] ( auto& C ) -> status_t {
         std::string proxy_name = {};
