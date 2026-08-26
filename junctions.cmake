@@ -4,14 +4,14 @@
 
 # Quintessential junctions - yes, yes, like the anime.
     # The built-in command line interpreter.
-    add_junction( cli )
+    #add_junction( cli )
     # Modbus RTU & TCP tool.
-    add_junction( modbus )
+    #add_junction( modbus )
 # Base:
 
 # Specific junctions - ready-to-use tools for specific device or use case.
     # Topdon TC001 thermal camera tool. 
-    add_junction( topdon-TC001 )
+    #add_junction( topdon-TC001 )
 
 # Contract junctions - closed source or client apps.
-# add_junction( charge-watch )
+include( ${CMAKE_CURRENT_LIST_DIR}/closed_junctions.cmake )

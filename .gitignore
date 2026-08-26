@@ -1,5 +1,5 @@
 build/
 .vscode/
 
-# External Junctions
-src/junctions/charge-watch
+# External junctions
+closed_junctions.cmake

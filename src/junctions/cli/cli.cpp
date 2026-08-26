@@ -96,7 +96,7 @@ protected:
             return replxx::Replxx::ACTION_RESULT::RETURN;
         } );
 
-        this->clear();
+        //this->clear();
 
         std::string line = {}; 
         while( BridgE.daemon_is_started() ) {

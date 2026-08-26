@@ -133,10 +133,11 @@ public:
     };
 
     struct uix_up_args_t {
-        int                     width      = 512;
-        int                     height     = 256;
-        float                   font_scale = 1.22f;
-        rgh::Immersive::Word_   bgnas      = rgh::Immersive::Default;
+        int                             width        = 512;
+        int                             height       = 256;
+        float                           font_scale   = 1.22f;
+        rgh::Immersive::Word_           bgnas        = rgh::Immersive::Default;
+        std::function< void( void ) >   styler       = &Bridge::uix_styler_dark_cyberpunk;
     };
 
 protected:
@@ -162,14 +163,14 @@ public:
     }
 
 protected:
-    _config_t   _config   = {};                                      
+    _config_t   _config   = {};                                  
 
     rgh::Dispenser< std::map< std::string, _proxy_entry_t > >   _proxy_tbl   = { rgh::DispenserMode_Lock };
     rgh::Dispenser< std::map< std::string, _dock_entry_t > >    _dock_tbl    = { rgh::DispenserMode_Lock };
 
-    struct _specprox_tbl_t {
+    struct _specs_tbl_t {
         rgh::HVec< Proxy >   cli   = nullptr;
-    } _specprox_tbl;
+    } _specs_tbl;
 
 public:
     status_t decl_uix_bound( 
@@ -247,7 +248,7 @@ protected:
                 logger->error( "bridge: start: null CLI proxy." );
                 goto l_cli_end;
             }
-            _specprox_tbl.cli = cli.ref;
+            _specs_tbl.cli = cli.ref;
             logger->info( "bridge: start: found the CLI proxy." );
 
             if( args->argc > 1 ) {
@@ -271,7 +272,7 @@ protected:
         auto dock_tbl = _dock_tbl.control(); ASSERT_AND( dock_tbl ) dock_tbl->clear();
         auto proxy_tbl = _proxy_tbl.control(); ASSERT_AND( proxy_tbl ) proxy_tbl->clear();
     }
-        _specprox_tbl.cli.reset();
+        _specs_tbl.cli.reset();
 
     //# Kill the graphical user interface.
         uix_down();
@@ -375,8 +376,8 @@ protected:
         IN   _dock_entry_t&   dken_
     ) {
         Dock& dock = *dken_.ref;
-
-        dock._dock_logger = std::make_shared< spdlog::logger >( dock._dock_id, this->get_logger_sink() );
+ 
+        dock._dock_logger = std::make_shared< spdlog::logger >( _dock_id_c_str( dock._dock_id ), this->get_logger_sink() );
         dock._dock_logger->set_pattern( RGH_SPDLOG_PATTERN );
     }
 
@@ -389,6 +390,13 @@ protected:
         Dock& dock = *dken_.ref;
 
         dock._uix_pack = dock.dock_uix_begin();
+    }
+
+    const char* _dock_id_c_str(
+        IN   const std::string&   id_
+    ) {
+        const int forced_ord_id_offset = id_.starts_with( '/' ) ? 2 : 0;
+        return &id_[ forced_ord_id_offset ];
     }
 
 public:
@@ -519,6 +527,167 @@ protected:
     std::shared_ptr< _uix_t >   _uix   = nullptr;
 
 public:
+//# Cyberpunk theme from: https://github.com/ocornut/imgui/issues/707.
+    static void uix_styler_dark_cyberpunk( void ) {
+        ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4* colors = style.Colors;
+
+        style.WindowPadding = ImVec2(10.0f, 10.0f);
+        style.FramePadding = ImVec2(6.0f, 4.0f);
+        style.ItemSpacing = ImVec2(8.0f, 4.0f);
+        style.ScrollbarSize = 13.0f;
+        style.GrabMinSize = 10.0f;
+
+        style.WindowRounding = 0.0f;
+        style.FrameRounding = 0.0f;
+        style.PopupRounding = 0.0f;
+        style.ScrollbarRounding = 0.0f;
+        style.GrabRounding = 0.0f;
+        style.TabRounding = 0.0f;
+
+        style.WindowBorderSize = 1.0f;
+        style.FrameBorderSize = 1.0f;
+        style.PopupBorderSize = 1.0f;
+
+        colors[ImGuiCol_Text] = ImVec4(0.00f, 1.00f, 0.62f, 1.00f);
+        colors[ImGuiCol_TextDisabled] = ImVec4(0.20f, 0.40f, 0.35f, 1.00f);
+
+        colors[ImGuiCol_WindowBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
+        colors[ImGuiCol_ChildBg] = ImVec4(0.02f, 0.02f, 0.04f, 0.00f);
+        colors[ImGuiCol_PopupBg] = ImVec4(0.02f, 0.02f, 0.04f, 0.98f);
+
+        colors[ImGuiCol_Border] = ImVec4(1.00f, 0.00f, 0.25f, 0.60f);
+        colors[ImGuiCol_BorderShadow] = ImVec4(1.00f, 0.00f, 0.25f, 0.20f);
+
+        colors[ImGuiCol_FrameBg] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
+        colors[ImGuiCol_FrameBgHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.20f);
+        colors[ImGuiCol_FrameBgActive] = ImVec4(1.00f, 0.00f, 0.25f, 0.40f);
+
+        colors[ImGuiCol_TitleBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
+        colors[ImGuiCol_TitleBgActive] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
+        colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
+
+        colors[ImGuiCol_MenuBarBg] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
+
+        colors[ImGuiCol_ScrollbarBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
+        colors[ImGuiCol_ScrollbarGrab] = ImVec4(1.00f, 0.93f, 0.04f, 0.60f);
+        colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
+        colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(1.00f, 0.93f, 0.04f, 1.00f);
+
+        colors[ImGuiCol_CheckMark] = ImVec4(1.00f, 0.93f, 0.04f, 1.00f); 
+        colors[ImGuiCol_SliderGrab] = ImVec4(1.00f, 0.00f, 0.25f, 0.80f);
+        colors[ImGuiCol_SliderGrabActive] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
+        colors[ImGuiCol_Button] = ImVec4(0.00f, 1.00f, 0.62f, 0.20f);
+        colors[ImGuiCol_ButtonHovered] = ImVec4(0.00f, 1.00f, 0.62f, 0.50f);
+        colors[ImGuiCol_ButtonActive] = ImVec4(0.00f, 1.00f, 0.62f, 1.00f);
+        colors[ImGuiCol_Header] = ImVec4(1.00f, 0.00f, 0.25f, 0.30f);
+        colors[ImGuiCol_HeaderHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.50f);
+        colors[ImGuiCol_HeaderActive] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
+
+        colors[ImGuiCol_Tab] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
+        colors[ImGuiCol_TabHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.80f);
+        colors[ImGuiCol_TabActive] = ImVec4(0.80f, 0.00f, 0.20f, 1.00f);
+
+        colors[ImGuiCol_TextSelectedBg] = ImVec4(1.00f, 0.93f, 0.04f, 0.30f);
+        colors[ImGuiCol_NavHighlight] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
+
+        colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
+
+        colors[ImGuiCol_TableBorderStrong] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
+        colors[ImGuiCol_TableBorderLight] = ImVec4(1.00f, 0.93f, 0.04f, 0.64f);
+    }
+//# ASIMOV skin.
+    static void uix_styler_light_industrial( void ) {
+        ImGuiStyle& style = ImGui::GetStyle();
+        ImVec4* colors = style.Colors;
+
+        style.WindowPadding     = ImVec2(14.0f, 14.0f);
+        style.FramePadding      = ImVec2(10.0f, 6.0f); 
+        style.CellPadding       = ImVec2(8.0f, 5.0f);
+        style.ItemSpacing       = ImVec2(10.0f, 8.0f);
+        style.ItemInnerSpacing  = ImVec2(8.0f, 6.0f);
+        style.IndentSpacing     = 20.0f;
+        style.ScrollbarSize     = 16.0f;
+        style.GrabMinSize       = 14.0f;
+
+        style.WindowRounding    = 0.0f;
+        style.ChildRounding     = 0.0f;
+        style.FrameRounding     = 0.0f;
+        style.PopupRounding     = 0.0f;
+        style.ScrollbarRounding = 0.0f;
+        style.GrabRounding      = 0.0f;
+        style.TabRounding       = 0.0f;
+
+        style.WindowBorderSize  = 1.0f;
+        style.ChildBorderSize   = 1.0f;
+        style.PopupBorderSize   = 1.0f;
+        style.FrameBorderSize   = 1.5f;
+        style.TabBorderSize     = 1.0f;
+
+        colors[ImGuiCol_Text]                  = ImVec4(0.10f, 0.10f, 0.11f, 1.00f);
+        colors[ImGuiCol_TextDisabled]          = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
+        colors[ImGuiCol_WindowBg]              = ImVec4(0.97f, 0.97f, 0.96f, 1.00f);
+        colors[ImGuiCol_ChildBg]               = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+        colors[ImGuiCol_PopupBg]               = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+
+        colors[ImGuiCol_Border]                = ImVec4(0.16f, 0.16f, 0.17f, 1.00f);
+        colors[ImGuiCol_BorderShadow]          = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+        colors[ImGuiCol_Separator]             = ImVec4(0.16f, 0.16f, 0.17f, 0.60f);
+        colors[ImGuiCol_SeparatorHovered]      = ImVec4(0.95f, 0.45f, 0.05f, 0.80f);
+        colors[ImGuiCol_SeparatorActive]       = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+
+        colors[ImGuiCol_FrameBg]               = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+        colors[ImGuiCol_FrameBgHovered]        = ImVec4(0.95f, 0.45f, 0.05f, 0.15f);
+        colors[ImGuiCol_FrameBgActive]         = ImVec4(0.95f, 0.45f, 0.05f, 0.28f);
+
+        colors[ImGuiCol_TitleBg]               = ImVec4(0.86f, 0.86f, 0.84f, 1.00f);
+        colors[ImGuiCol_TitleBgActive]         = ImVec4(0.86f, 0.86f, 0.84f, 1.00f);
+        colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.86f, 0.86f, 0.84f, 0.75f);
+        colors[ImGuiCol_MenuBarBg]             = ImVec4(0.86f, 0.86f, 0.84f, 1.00f);
+
+        colors[ImGuiCol_ScrollbarBg]           = ImVec4(0.90f, 0.90f, 0.89f, 1.00f);
+        colors[ImGuiCol_ScrollbarGrab]         = ImVec4(0.30f, 0.30f, 0.31f, 1.00f);
+        colors[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(0.95f, 0.45f, 0.05f, 0.80f);
+        colors[ImGuiCol_ScrollbarGrabActive]   = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+
+        colors[ImGuiCol_CheckMark]             = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+        colors[ImGuiCol_SliderGrab]            = ImVec4(0.16f, 0.16f, 0.17f, 1.00f);
+        colors[ImGuiCol_SliderGrabActive]      = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+
+        colors[ImGuiCol_Button]                = ImVec4(0.82f, 0.82f, 0.80f, 1.00f);
+        colors[ImGuiCol_ButtonHovered]         = ImVec4(0.95f, 0.45f, 0.05f, 0.85f);
+        colors[ImGuiCol_ButtonActive]          = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+
+        colors[ImGuiCol_Header]                = ImVec4(0.16f, 0.16f, 0.17f, 0.32f);
+        colors[ImGuiCol_HeaderHovered]         = ImVec4(0.95f, 0.45f, 0.05f, 0.35f);
+        colors[ImGuiCol_HeaderActive]          = ImVec4(0.95f, 0.45f, 0.05f, 0.55f);
+
+        colors[ImGuiCol_TableHeaderBg]         = ImVec4(0.86f, 0.86f, 0.84f, 1.00f);
+        colors[ImGuiCol_TableBorderStrong]     = ImVec4(0.16f, 0.16f, 0.17f, 1.00f);
+        colors[ImGuiCol_TableBorderLight]      = ImVec4(0.55f, 0.55f, 0.56f, 1.00f);
+        colors[ImGuiCol_TableRowBg]            = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+        colors[ImGuiCol_TableRowBgAlt]         = ImVec4(0.16f, 0.16f, 0.17f, 0.04f);
+
+        colors[ImGuiCol_Tab]                   = ImVec4(0.82f, 0.82f, 0.80f, 1.00f);
+        colors[ImGuiCol_TabHovered]            = ImVec4(0.95f, 0.45f, 0.05f, 0.85f);
+        colors[ImGuiCol_TabActive]             = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+        colors[ImGuiCol_TabUnfocused]          = ImVec4(0.82f, 0.82f, 0.80f, 0.70f);
+        colors[ImGuiCol_TabUnfocusedActive]    = ImVec4(0.95f, 0.45f, 0.05f, 0.55f);
+
+        colors[ImGuiCol_PlotLines]             = ImVec4(0.16f, 0.16f, 0.17f, 1.00f);
+        colors[ImGuiCol_PlotLinesHovered]      = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+        colors[ImGuiCol_PlotHistogram]         = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+        colors[ImGuiCol_PlotHistogramHovered]  = ImVec4(0.80f, 0.35f, 0.02f, 1.00f);
+
+        colors[ImGuiCol_TextSelectedBg]        = ImVec4(0.95f, 0.45f, 0.05f, 0.35f);
+        colors[ImGuiCol_DragDropTarget]        = ImVec4(0.95f, 0.45f, 0.05f, 0.90f);
+        colors[ImGuiCol_NavHighlight]          = ImVec4(0.95f, 0.45f, 0.05f, 1.00f);
+        colors[ImGuiCol_NavWindowingHighlight] = ImVec4(0.95f, 0.45f, 0.05f, 0.70f);
+        colors[ImGuiCol_NavWindowingDimBg]     = ImVec4(0.16f, 0.16f, 0.17f, 0.35f);
+        colors[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.16f, 0.16f, 0.17f, 0.45f);
+    }
+
+public:
     void uix_up( 
         IN   const uix_up_args_t&   args_
     ) {
@@ -533,76 +702,8 @@ public:
             .width      = args_.width,
             .height     = args_.height,
             .srf_bgn_as = args_.bgnas,
-            .init_cb    = [ this, fs = args_.font_scale ] ( const auto& args_ ) {
-//# Cyberpunk theme from: https://github.com/ocornut/imgui/issues/707 
-#pragma region UIX_Theme
-                ImGuiStyle& style = *_uix->imm->imgui.stl;
-                ImVec4* colors = style.Colors;
-
-                style.WindowPadding = ImVec2(10.0f, 10.0f);
-                style.FramePadding = ImVec2(6.0f, 4.0f);
-                style.ItemSpacing = ImVec2(8.0f, 4.0f);
-                style.ScrollbarSize = 13.0f;
-                style.GrabMinSize = 10.0f;
-
-                style.WindowRounding = 0.0f;
-                style.FrameRounding = 0.0f;
-                style.PopupRounding = 0.0f;
-                style.ScrollbarRounding = 0.0f;
-                style.GrabRounding = 0.0f;
-                style.TabRounding = 0.0f;
-
-                style.WindowBorderSize = 1.0f;
-                style.FrameBorderSize = 1.0f;
-                style.PopupBorderSize = 1.0f;
-
-                colors[ImGuiCol_Text] = ImVec4(0.00f, 1.00f, 0.62f, 1.00f);
-                colors[ImGuiCol_TextDisabled] = ImVec4(0.20f, 0.40f, 0.35f, 1.00f);
-
-                colors[ImGuiCol_WindowBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
-                colors[ImGuiCol_ChildBg] = ImVec4(0.02f, 0.02f, 0.04f, 0.00f);
-                colors[ImGuiCol_PopupBg] = ImVec4(0.02f, 0.02f, 0.04f, 0.98f);
-
-                colors[ImGuiCol_Border] = ImVec4(1.00f, 0.00f, 0.25f, 0.60f);
-                colors[ImGuiCol_BorderShadow] = ImVec4(1.00f, 0.00f, 0.25f, 0.20f);
-
-                colors[ImGuiCol_FrameBg] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
-                colors[ImGuiCol_FrameBgHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.20f);
-                colors[ImGuiCol_FrameBgActive] = ImVec4(1.00f, 0.00f, 0.25f, 0.40f);
-
-                colors[ImGuiCol_TitleBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
-                colors[ImGuiCol_TitleBgActive] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
-                colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
-
-                colors[ImGuiCol_MenuBarBg] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
-
-                colors[ImGuiCol_ScrollbarBg] = ImVec4(0.02f, 0.02f, 0.04f, 1.00f);
-                colors[ImGuiCol_ScrollbarGrab] = ImVec4(1.00f, 0.93f, 0.04f, 0.60f);
-                colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
-                colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(1.00f, 0.93f, 0.04f, 1.00f);
-
-                colors[ImGuiCol_CheckMark] = ImVec4(1.00f, 0.93f, 0.04f, 1.00f); 
-                colors[ImGuiCol_SliderGrab] = ImVec4(1.00f, 0.00f, 0.25f, 0.80f);
-                colors[ImGuiCol_SliderGrabActive] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
-                colors[ImGuiCol_Button] = ImVec4(0.00f, 1.00f, 0.62f, 0.20f);
-                colors[ImGuiCol_ButtonHovered] = ImVec4(0.00f, 1.00f, 0.62f, 0.50f);
-                colors[ImGuiCol_ButtonActive] = ImVec4(0.00f, 1.00f, 0.62f, 1.00f);
-                colors[ImGuiCol_Header] = ImVec4(1.00f, 0.00f, 0.25f, 0.30f);
-                colors[ImGuiCol_HeaderHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.50f);
-                colors[ImGuiCol_HeaderActive] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
-
-                colors[ImGuiCol_Tab] = ImVec4(0.05f, 0.05f, 0.10f, 1.00f);
-                colors[ImGuiCol_TabHovered] = ImVec4(1.00f, 0.00f, 0.25f, 0.80f);
-                colors[ImGuiCol_TabActive] = ImVec4(0.80f, 0.00f, 0.20f, 1.00f);
-
-                colors[ImGuiCol_TextSelectedBg] = ImVec4(1.00f, 0.93f, 0.04f, 0.30f);
-                colors[ImGuiCol_NavHighlight] = ImVec4(1.00f, 0.00f, 0.25f, 1.00f);
-
-                colors[ImGuiCol_Separator] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
-
-                colors[ImGuiCol_TableBorderStrong] = ImVec4(1.00f, 0.93f, 0.04f, 0.80f);
-                colors[ImGuiCol_TableBorderLight] = ImVec4(1.00f, 0.93f, 0.04f, 0.64f);
-#pragma endregion UIX_Theme        
+            .init_cb    = [ this, fs = args_.font_scale, styler = args_.styler ] ( const auto& args_ ) {
+                if( styler ) styler();
                 _uix->imm->imgui.io->FontGlobalScale = fs;
                 _uix->imm->disengage_face_culling();   
 
@@ -692,9 +793,9 @@ protected:
                 ImGuiWindowFlags_NoSavedSettings
             );
 
-            if( ImGui::BeginTable( "##proxy-dock-split", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV ) ) {
-                ImGui::TableSetupColumn( "##proxys", ImGuiTableColumnFlags_WidthFixed, 150.0f );
-                ImGui::TableSetupColumn( "##docks", ImGuiTableColumnFlags_WidthStretch );
+            if( ImGui::BeginTable( "##tbl-proxy-dock-split", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV ) ) {
+                ImGui::TableSetupColumn( "##proxy-zone", ImGuiTableColumnFlags_WidthFixed, 150.0f );
+                ImGui::TableSetupColumn( "##dock-zone", ImGuiTableColumnFlags_WidthStretch );
 
                 ImGui::TableNextColumn();
                 
@@ -717,15 +818,15 @@ protected:
         
                 ImGui::TableNextColumn();
 
-                if( auto dock_tbl = _dock_tbl.watch(); ImGui::BeginTabBar( "##docks", ImGuiTabBarFlags_FittingPolicyScroll ) ) {
+                if( auto dock_tbl = _dock_tbl.watch(); ImGui::BeginTabBar( "##tabs-dock", ImGuiTabBarFlags_FittingPolicyScroll ) ) {
                     int  crtno = 0x0; 
 
                     for( auto& [ id, dock ] : *dock_tbl ) {
-                        ASSERT_OR( not dock.ref->dock_id().starts_with( '#' ) ) continue;
+                        ASSERT_OR( not id.starts_with( '#' ) ) continue;
                         ImGui::PushID( crtno );
 
                         bool tab_open = true;
-                        if( ImGui::BeginTabItem( id.c_str(), dock->dock_uix_persistent() ? nullptr : &tab_open ) ) {
+                        if( ImGui::BeginTabItem( _dock_id_c_str( id ), dock->dock_uix_persistent() ? nullptr : &tab_open ) ) {
                             if( rgh::Immersive::was_dbl_clk() ) {
                                 _uix->focus = { id, const_cast< _dock_entry_t* >( &dock ) };
                             }

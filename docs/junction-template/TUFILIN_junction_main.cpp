@@ -55,6 +55,10 @@ public:
 
 //# TUFILIN - required, the command interpreter of your proxy.
     JUNCTION_PROXY_PASS_FNC_SIG{
+        switch( rgh::txt_hash( line_ ) ) {
+        //# TUFILIN - optional, argument-less dock installation.
+            JUNCTION_PROXY_PASS_BASIC_DOCK_INSTALL()
+        }
         return OK;
     }
 };

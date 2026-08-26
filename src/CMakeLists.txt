@@ -55,4 +55,12 @@ macro( add_junction junc_ )
     target_include_directories( ${JUNCTION_NAME} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/" )
 endmacro()
 
+macro( add_junction_ex junc_ dir_ )
+    set( JUNCTION_NAME junction-${junc_} )
+    add_subdirectory( "${dir_}" "${CMAKE_CURRENT_BINARY_DIR}/junction-${junc_}-build" )
+    target_link_libraries( ${PROJECT_NAME} PRIVATE ${JUNCTION_NAME} )
+    target_link_libraries( ${JUNCTION_NAME} PRIVATE rgh::libosp )
+    target_include_directories( ${JUNCTION_NAME} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/" )
+endmacro()
+
 include( "${CMAKE_CURRENT_LIST_DIR}/../junctions.cmake" )
