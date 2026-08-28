@@ -104,6 +104,7 @@ public:
 public:
     virtual std::shared_ptr< UIX_pack > dock_uix_begin() { return nullptr; }
     virtual status_t dock_uix_frame( const dock_uix_frame_args_t& args_ ) { return ERR_NOT_IMPL; }
+    virtual status_t dock_uix_fw_frame( const dock_uix_frame_args_t& args_ ) { return ERR_NOT_IMPL; }
     virtual void  dock_uix_end() { return; }
     virtual const bool dock_uix_persistent() const { return false; }
 
@@ -365,7 +366,7 @@ public:
 protected:
     void _dock_entry_set_id(
         IN   _dock_entry_t&   dken_,
-        IN   std::string            id_
+        IN   std::string      id_
     ) {
         Dock& dock = *dken_.ref;
 
@@ -399,8 +400,14 @@ protected:
         return &id_[ forced_ord_id_offset ];
     }
 
+    void _dock_drop_hooks(
+        IN   _dock_entry_t&   dken_
+    ) {
+        uix_unfocus( dken_.ref.get() );
+    }
+
 public:
-//# Install a dock in the bridge with the given ID. 
+//# Install the dock in the bridge with the given ID. 
 //# Note that IDs must be unique.
     status_t install_dock(
         IN   std::string           id_,
@@ -440,35 +447,30 @@ public:
         return OK;
     }
 
-//# Uninstall a dock from the bridge.
+//# Uninstall the dock from the bridge.
     status_t uninstall_dock(
         IN   const std::string&   id_
     ) {
-    //# Acquire the dock table and obtain the entry.
+    //# Control the dock table.
         auto dock_tbl = _dock_tbl.control();
         ASSERT_OR( dock_tbl ) {
-            logger->error( "bridge: uninstall dock (\"{}\"): bad table lock.", id_ );
-            return ERR_BUSY;
+            logger->error( "bridge: uninstall dock {}: bad control.", id_ ); return ERR_BUSY;
         }
-
-        auto itr = dock_tbl->find( id_ );
-        ASSERT_OR( itr != dock_tbl->end() ) return OK;
-    
-    //# Release any references pointing to this dock entry.
-        uix_unfocus( itr->first );
-
+    //# Index the dock.
+        auto itr = dock_tbl->find( id_ ); ASSERT_OR( itr != dock_tbl->end() ) return OK;
+    //# Release any hooks referencing this dock entry.
+        _dock_drop_hooks( itr->second );
+    //# Trigger a UIX down for this dock.
         if( auto imm = uix_imm_strong(); imm ) {
             itr->second.ref->dock_uix_end();
             itr->second.ref->_uix_pack.reset();
         }
-        
-    //# Erase the entry.
+    //# Drop the entry.
         dock_tbl->erase( itr );
         dock_tbl.release();
-
         spdlog::drop( id_ );
 
-        logger->info( "bridge: uninstalled dock: \"{}\".", id_ );
+        logger->info( "bridge: uninstalled dock: {}.", id_ );
         return OK;
     }
 
@@ -519,10 +521,14 @@ public:
     }
 
 protected:
+//# The UIX structure that gets created when the UIX is started.
     struct _uix_t {
-        std::shared_ptr< rgh::Immersive >               imm      = std::make_shared< rgh::Immersive >();
-        std::pair< std::string_view, _dock_entry_t* >   focus    = {};
-        std::jthread                                    imm_th   = {};
+    //# Graphics framework.
+        std::shared_ptr< rgh::Immersive >     imm      = std::make_shared< rgh::Immersive >();
+    //# The thread that runs the graphics framework.
+        std::jthread                          imm_th   = {};
+    //# Reference to the focused dock. Safe to store in raw pointer since it is accessed under reference lock.
+        std::atomic< const _dock_entry_t* >   focus    = {};
     };
     std::shared_ptr< _uix_t >   _uix   = nullptr;
 
@@ -740,29 +746,39 @@ public:
         uix->imm->sig_main_exit();
     }
 
+//# Place the dock in focus.
+    status_t uix_focus(
+        IN   const _dock_entry_t&   dken_
+    ) {
+    //# Assert that UIX is up.
+        auto uix = _uix; ASSERT_OR( uix ) return ERR_NO_RESOLVE;
+    //# Store the dock entry into the focus reference.
+        uix->focus.store( &dken_, std::memory_order_relaxed );
+        return OK;
+    }
+//# Place the dock indexed by the given ID in focus.
     status_t uix_focus(
         IN   const std::string&   id_
     ) {
-    //# Assert that UIX is up.
-        auto uix = _uix; ASSERT_OR( uix ) return ERR_NO_RESOLVE;
-
-    //# Acquire control over the dock table and set the UIX focus.
-        auto dock_tbl = _dock_tbl.control();
-        
-        auto itr = dock_tbl->find( id_ );
-        ASSERT_OR( itr != dock_tbl->end() ) return ERR_NOT_FOUND;
-        
-        uix->focus = { itr->first, &itr->second };
+    //# Acquire watch over the dock table and set the UIX focus.
+        auto dock_tbl = _dock_tbl.watch(); ASSERT_OR( dock_tbl ) return ERR_BUSY;
+    //# Index the dock.
+        auto itr = dock_tbl->find( id_ ); ASSERT_OR( itr != dock_tbl->end() ) return ERR_NOT_FOUND;
+    //# Place in focus.
+        uix_focus( itr->second );
         return OK;
     }
 
-    status_t uix_unfocus(
-        IN   std::string_view   id_   = ""
+//# Remove the currently focused or specified dock, if any.
+    status_t uix_unfocus( 
+        IN   const Dock*   dock_ = nullptr
     ) {
     //# Assert that UIX is up.
         auto uix = _uix; ASSERT_OR( uix ) return ERR_NO_RESOLVE;
-
-        if( id_.empty() || id_ == _uix->focus.first ) _uix->focus = { {}, nullptr };
+    //# Check if the current focused dock is the requested one.
+        if( dock_ && dock_ != _uix->focus.load( std::memory_order_relaxed )->ref.get() ) return OK;
+    //# Drop focus.
+        _uix->focus.store( nullptr, std::memory_order_relaxed );
         return OK;
     }
 
@@ -785,7 +801,8 @@ protected:
         ImGui::SetNextWindowPos( viewport->WorkPos );
         ImGui::SetNextWindowSize( viewport->WorkSize );
 
-        if( not _uix->focus.second ) {
+        const auto* focus = _uix->focus.load( std::memory_order_relaxed );
+        if( not focus ) [[likely]] {
             ImGui::Begin( CLITOR_VERSION_STR, nullptr, 
                 ImGuiWindowFlags_NoDecoration          |
                 ImGuiWindowFlags_NoMove                |
@@ -797,73 +814,79 @@ protected:
                 ImGui::TableSetupColumn( "##proxy-zone", ImGuiTableColumnFlags_WidthFixed, 150.0f );
                 ImGui::TableSetupColumn( "##dock-zone", ImGuiTableColumnFlags_WidthStretch );
 
-                ImGui::TableNextColumn();
-                
-                ImGui::Text( "cliTor" );
-                ImGui::Separator();
-                
-                int proxy_id = 0x0; for( auto& proxy : *_proxy_tbl.watch() ) {
-                    ASSERT_OR( not proxy.first.starts_with( "#" ) ) continue;
+                ImGui::TableNextColumn(); {
+                    ImGui::Text( "cliTor" );
+                    ImGui::Separator();
+                    
+                    int proxy_id = 0x0; for( auto& proxy : *_proxy_tbl.watch() ) {
+                        ASSERT_OR( not proxy.first.starts_with( "#" ) ) continue;
 
-                    ImGui::PushID( proxy_id );
+                        ImGui::PushID( proxy_id );
 
-                    if( ImGui::Selectable( proxy.first.c_str() ) ) {
-                        push( [ this, pn = proxy.first ] {
-                            proxy_pass( pn, "install" );
-                        } );
-                    }
-
-                    ImGui::PopID();
-                }
-        
-                ImGui::TableNextColumn();
-
-                if( auto dock_tbl = _dock_tbl.watch(); ImGui::BeginTabBar( "##tabs-dock", ImGuiTabBarFlags_FittingPolicyScroll ) ) {
-                    int  crtno = 0x0; 
-
-                    for( auto& [ id, dock ] : *dock_tbl ) {
-                        ASSERT_OR( not id.starts_with( '#' ) ) continue;
-                        ImGui::PushID( crtno );
-
-                        bool tab_open = true;
-                        if( ImGui::BeginTabItem( _dock_id_c_str( id ), dock->dock_uix_persistent() ? nullptr : &tab_open ) ) {
-                            if( rgh::Immersive::was_dbl_clk() ) {
-                                _uix->focus = { id, const_cast< _dock_entry_t* >( &dock ) };
-                            }
-
-                            ImGui::BeginChild( "##dock_frame", ImVec2{ 0, -ImGui::GetFrameHeightWithSpacing() }, ImGuiChildFlags_Border );
-                                dock->dock_uix_frame( { args_, dock->_uix_pack.get() } );
-                            ImGui::EndChild(); ImGui::EndTabItem();
-
-                            tab_open = !rgh::Immersive::ctrl( ImGuiKey_W );
+                        if( ImGui::Selectable( proxy.first.c_str() ) ) {
+                            push( [ this, pn = proxy.first ] {
+                                proxy_pass( pn, "install" );
+                            } );
                         }
-                        
-                        if( not tab_open ) { push( [ this, id ] { uninstall_dock( id ); } ); }
+
                         ImGui::PopID();
                     }
-
-                    ImGui::EndTabBar();
                 }
+                ImGui::TableNextColumn(); {
+                    auto dock_tbl = _dock_tbl.watch(); ASSERT_OR( dock_tbl ) return ERR_BUSY;
 
+                    const ImGuiTabBarFlags tab_bar_flags = ImGuiTabBarFlags_FittingPolicyScroll |
+                                                           ImGuiTabBarFlags_AutoSelectNewTabs   |
+                                                           ImGuiTabBarFlags_DrawSelectedOverline;
+
+                    if( ImGui::BeginTabBar( "##tabs-dock", tab_bar_flags ) ) {
+                        int crtno = 0x0; 
+                        for( auto& [ id, dock ] : *dock_tbl ) {
+                            ASSERT_OR( not id.starts_with( '#' ) ) continue;
+                            ImGui::PushID( crtno );
+                                bool tab_open = true;
+
+                                const ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
+
+                                if( ImGui::BeginTabItem( _dock_id_c_str( id ), dock->dock_uix_persistent() ? nullptr : &tab_open, tab_item_flags ) ) {
+                                    if( rgh::Immersive::was_dbl_clk() ) {
+                                        uix_focus( dock );
+                                    }
+
+                                    ImGui::BeginChild( "##dock_frame", ImVec2{ 0, -ImGui::GetFrameHeightWithSpacing() }, ImGuiChildFlags_Border );
+                                        dock->dock_uix_frame( { args_, dock->_uix_pack.get() } );
+                                    ImGui::EndChild(); ImGui::EndTabItem();
+
+                                    tab_open = !rgh::Immersive::ctrl( ImGuiKey_W );
+                                }
+                                
+                                if( not tab_open ) { push( [ this, id ] { uninstall_dock( id ); } ); }
+                            ImGui::PopID();
+                        }
+
+                        ImGui::EndTabBar();
+                    }
+                }
                 ImGui::EndTable();
             }
 
             ImGui::Separator();
         } else {
             bool focused = true;
-            auto focus   = _uix->focus;
+            
+            auto dock_tbl = _dock_tbl.watch(); ASSERT_OR( dock_tbl ) return ERR_BUSY;
+                 focus    = _uix->focus.load( std::memory_order_relaxed );
 
-            ImGui::Begin( focus.first.cbegin(), &focused, 
+            ImGui::Begin( _dock_id_c_str( focus->ref->dock_id() ), &focused, 
                 ImGuiWindowFlags_NoMove          |
                 ImGuiWindowFlags_NoResize        |  
                 ImGuiWindowFlags_NoSavedSettings |
                 ImGuiWindowFlags_NoCollapse
             );
 
-            auto dock_tbl = _dock_tbl.watch();
-            focus.second->ref->dock_uix_frame( { args_, focus.second->ref->_uix_pack.get() } );
+            focus->ref->dock_uix_frame( { args_, focus->ref->_uix_pack.get() } );
 
-            if( not focused ) _uix->focus = { {}, nullptr };
+            if( not focused ) uix_unfocus();
         }
 
         ImGui::End();

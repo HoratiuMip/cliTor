@@ -13,6 +13,9 @@ constexpr float   VIDEO_FEED_UPSCALE   = 2.f;
 
 class Topdon_TC001 : public Dock {
 public:
+    static constexpr const char* const   VID_PID_STR   = "0bda:5830";
+
+public:
     Topdon_TC001( void ) = default;
 
     Topdon_TC001( 
@@ -152,9 +155,11 @@ public:
 
         ImGui::SeparatorText( "Available cameras" ); {
             auto ports = _com_ports.watch();
-            auto [ port, selected_now, rescan ] = pack->com_ports.imm_frame( ports, "Scan for cameras", "No cameras found." );
+            auto [ conn_to, _ ] = pack->com_ports.imm_frame( ports, { args_,
+                "Scan for cameras", "No cameras found.", BridgE, { VID_PID_STR }
+            } );
 
-            if( selected_now ) BridgE.push( [ this, port ] { open( port->id ); } );
+            if( conn_to ) BridgE.push( [ this, port_id = conn_to->id ] { open( port_id ); } );
         }
 
         auto mM_tmp = proc_res.mM_tmp.load( std::memory_order_relaxed );
