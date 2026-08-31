@@ -4,7 +4,7 @@
 
 # Quintessential junctions - yes, yes, like the anime.
     # The built-in command line interpreter.
-    #add_junction( cli )
+    add_junction( cli )
     # Modbus RTU & TCP tool.
     #add_junction( modbus )
 # Base:

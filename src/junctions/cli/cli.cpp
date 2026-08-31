@@ -3,6 +3,10 @@
 
 #include <replxx.hxx>
 
+#include <rgh/brp/IO_utils.hpp>
+#include <rgh/osp/IO_sockets.hpp>
+#include <rgh/osp/IO_utils.hpp>
+
 #include <bridge.hpp>
 JUNCTION_HEADER( cli, "#cli" )
 
@@ -68,6 +72,9 @@ public:
             #include "cmds/uix_up.inl"
             ,
             #include "cmds/uix_down.inl"
+            ,
+
+            #include "cmds/inet.inl"
         }
     } {}
 
