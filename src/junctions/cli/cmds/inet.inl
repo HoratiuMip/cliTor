@@ -3,6 +3,12 @@
         { .sh0rt = 'h', .l0ng = "hosts-of", .arg = rgh::Fast_cli::argtext },
         { .sh0rt = 't', .l0ng = "ntp", .arg = rgh::Fast_cli::argtext },
     },
+    .man = "arguments: \n"
+           "\t-h --hosts-of: retrieve the ipv4 hosts of the given domain.\n"
+           "\texample: qinet --hosts-of idolfap.com\n"
+           "\t-t --ntp: retrieve the ntp time from the given ntp server.\n"
+           "\texample: qinet --ntp pool.ntp.org"
+    ,
     .fnc = [ this ] ( auto& C ) -> status_t {
         RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
             case 'h': {

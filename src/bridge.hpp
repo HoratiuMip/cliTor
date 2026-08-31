@@ -776,7 +776,9 @@ public:
     //# Assert that UIX is up.
         auto uix = _uix; ASSERT_OR( uix ) return ERR_NO_RESOLVE;
     //# Check if the current focused dock is the requested one.
-        if( dock_ && dock_ != _uix->focus.load( std::memory_order_relaxed )->ref.get() ) return OK;
+        const auto* crt_focus = _uix->focus.load( std::memory_order_relaxed );
+        ASSERT_OR( crt_focus ) return OK;
+        if( dock_ && dock_ != crt_focus->ref.get() ) return OK;
     //# Drop focus.
         _uix->focus.store( nullptr, std::memory_order_relaxed );
         return OK;
@@ -823,7 +825,17 @@ protected:
 
                         ImGui::PushID( proxy_id );
 
-                        if( ImGui::Selectable( proxy.first.c_str() ) ) {
+                    //# Check if the proxy zone is expanded, immediately following the middle click auto install.
+                    //# Execute the proxy header uix frame after.
+                        const bool proxy_header_expanded   = ImGui::CollapsingHeader( proxy.first.c_str(), ImGuiTreeNodeFlags_None );
+                        bool       proxy_will_auto_install = ImGui::IsItemHovered() 
+                                                             and 
+                                                             ( ImGui::IsMouseClicked( ImGuiMouseButton_Middle ) or rgh::Immersive::ctrl( ImGuiKey_T ) );
+        
+                        if( proxy_header_expanded ) {
+
+                        }
+                        if( proxy_will_auto_install ) {
                             push( [ this, pn = proxy.first ] {
                                 proxy_pass( pn, "install" );
                             } );
@@ -857,7 +869,7 @@ protected:
                                         dock->dock_uix_frame( { args_, dock->_uix_pack.get() } );
                                     ImGui::EndChild(); ImGui::EndTabItem();
 
-                                    tab_open = !rgh::Immersive::ctrl( ImGuiKey_W );
+                                    if( rgh::Immersive::ctrl( ImGuiKey_W ) ) tab_open = false;
                                 }
                                 
                                 if( not tab_open ) { push( [ this, id ] { uninstall_dock( id ); } ); }
