@@ -33,8 +33,8 @@
     
                 const auto& ntp_host = ntp_hosts->front();
 
-                rgh::io::IPv4_UDP_rogue_client client;
-                auto port = client.port_of( { .addr = ntp_host, .port = rgh::io::NTP_PORT } );
+                rgh::io::IPv4_Kraken client;
+                auto port = client.port_of( { .addr = ntp_host, .port = rgh::io::NTP_PORT, .proto = rgh::io::IP_PROTO_UDP } );
 
                 auto ntp_packet = rgh::io::ntp_get( port );
                 ASSERT_OR( ntp_packet ) {

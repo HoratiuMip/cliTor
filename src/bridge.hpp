@@ -47,6 +47,8 @@
         static int _next_dock_id = 0; \
         BridgE.install_dock( std::format( "{}-{}", JUNCTION_NAME, _next_dock_id++ ), rgh::HVec< dock_t_ >::make() ); \
         break; }
+#define JUNCTION_PROXY_UIX_FRAME_FNC_SIG \
+    virtual status_t proxy_uix_frame( const proxy_uix_frame_args_t& C ) override
 
 #define JUNCTION_DOCK_GET_ID_FNC_SIG \
     virtual std::string_view dock_get_id() const noexcept
@@ -79,6 +81,7 @@
 
 
 typedef   rgh::status_t   status_t;
+typedef   rgh::ret_t      ret_t;
 
 
 class Dock {
@@ -116,13 +119,31 @@ protected:
 class Proxy {
 public: friend class Bridge;
 
+protected:
+//# Fields and configs populated by the bridge once, when the proxy is installed.
+    struct _static_fields_t {
+        struct _uix {
+        //# Whether this proxy has overridden the basic UIX frame.
+            bool   has_basic_uix_frame_overridden   = false;
+        } uix;
+    } _static_fields;
+
 public: 
     virtual std::string_view proxy_get_name() const = 0;
     
-    virtual void     proxy_wake()                    { return; }
+    virtual void proxy_wake() { return; }
     virtual status_t proxy_pass( std::string line_ ) { return ERR_NOT_IMPL; };
 
     virtual Dock* proxy_as_dock() { return nullptr; }
+
+public:
+//# For now we keep it down to pure basic ImGui calls, no advanced graphics which
+//#   would require the proxy to have a UIX pack. 
+    struct proxy_uix_frame_args_t : rgh::Immersive::frame_cb_args_t {
+
+    };
+
+    virtual status_t proxy_uix_frame( const proxy_uix_frame_args_t& C ) { return ERR_NOT_IMPL; }
 };
 
 class Bridge : public rgh::bridge_t, public rgh::Daemon, public rgh::Thread_pool  {
@@ -134,9 +155,10 @@ public:
     };
 
     struct uix_up_args_t {
-        int                             width        = 512;
-        int                             height       = 256;
-        float                           font_scale   = 1.22f;
+        const char*                     title        = CLITOR_VERSION_STR;
+        int                             width        = 648;
+        int                             height       = 480;
+        float                           font_scale   = 1.26f;
         rgh::Immersive::Word_           bgnas        = rgh::Immersive::Default;
         std::function< void( void ) >   styler       = &Bridge::uix_styler_dark_cyberpunk;
     };
@@ -215,7 +237,7 @@ protected:
 
     //# Launch the worker threads. Might pass this to the daemon wake function so
     //    the number of threads can be chosen via the CLI.
-        ASSERT_STATUS_AND( this->rgh::Thread_pool::launch( args->wcnt ) ) {
+        ASSERT_STATUS_AND( rgh::Thread_pool::launch( args->wcnt ) ) {
             logger->info( "bridge: start: launched {} workers.", args->wcnt );
         } else {
             logger->warn( "bridge: start: bad workers ({}) launch.", args->wcnt );
@@ -284,6 +306,16 @@ protected:
 #pragma endregion DAEMON
 
 #pragma region PROXY
+protected:
+    void _proxy_entry_populate_static_fields(
+        IN   _proxy_entry_t&   pxen_
+    ) {
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpmf-conversions"
+        pxen_->_static_fields.uix.has_basic_uix_frame_overridden = RGH_ILL_HAS_OVERRIDDEN( pxen_.ref.get(), Proxy::proxy_uix_frame );
+    #pragma GCC diagnostic pop
+    }
+
 public:
     status_t install_proxy(
         IN   rgh::HVec< Proxy >&&   proxy_
@@ -315,9 +347,9 @@ public:
 
         proxy.ref = std::move( proxy_ );
         if( auto dock = proxy.ref->proxy_as_dock(); dock ) {
-            this->install_dock( proxy.ref->proxy_get_name().cbegin(), rgh::HVec< Dock >{ rgh::hvec_weak_ptr_t{ dock } } );
+            install_dock( proxy.ref->proxy_get_name().cbegin(), rgh::HVec< Dock >{ rgh::hvec_weak_ptr_t{ dock } } );
         }
-
+        _proxy_entry_populate_static_fields( proxy );
         proxy_tbl.release();
 
         logger->info( "bridge: installed proxy: \"{}\".", pn );
@@ -378,7 +410,7 @@ protected:
     ) {
         Dock& dock = *dken_.ref;
  
-        dock._dock_logger = std::make_shared< spdlog::logger >( _dock_id_c_str( dock._dock_id ), this->get_logger_sink() );
+        dock._dock_logger = std::make_shared< spdlog::logger >( _dock_id_c_str( dock._dock_id ), get_logger_sink() );
         dock._dock_logger->set_pattern( RGH_SPDLOG_PATTERN );
     }
 
@@ -476,7 +508,8 @@ public:
 
 //# Retrieve a strong reference to the dock having the given ID.
     rgh::HVec< Dock > dock_by_id( 
-        IN   const std::string&   id_
+        IN   const std::string&   id_,
+        IN   int                  lvdtol_ = 0
     ) {
     //# Acquire the lock over the dock table, search for the entry and return it.
         auto dock_tbl = _dock_tbl.control();
@@ -485,13 +518,28 @@ public:
             return nullptr;
         }
 
-        auto dock_itr = dock_tbl->find( id_ ); 
-        ASSERT_OR( dock_itr != dock_tbl->end() ) {
-            logger->error( "bridge: dock by id: no such dock: {}.", id_ );
-            return nullptr;
-        }
+        if( lvdtol_ == 0 ) {
+            auto dock_itr = dock_tbl->find( id_ ); 
+            ASSERT_OR( dock_itr != dock_tbl->end() ) {
+                logger->error( "bridge: dock by id: no such dock: {}.", id_ );
+                return nullptr;
+            }
+            return dock_itr->second.ref;
+        } else {
+            _dock_entry_t* min_dxen = nullptr;
+            auto           min_dist = std::numeric_limits< int >::max();
 
-        return dock_itr->second.ref;
+            for( auto& [ id, dxen ] : *dock_tbl ) {
+                const auto dist = rgh::lev_dist( id, id_ );
+                if( dist > lvdtol_ or dist > min_dist ) continue;
+
+                min_dxen = &dxen;
+                min_dist = dist;
+            }
+
+            return min_dxen ? min_dxen->ref : nullptr; 
+        }
+        std::unreachable();
     }
 
 #pragma endregion DOCK
@@ -704,7 +752,7 @@ public:
     //# Launch the UIX thread.
         _uix->imm_th = std::jthread( &rgh::Immersive::main, _uix->imm.get(), 0, nullptr, rgh::Immersive::config_t{
             .ctx        = nullptr,
-            .title      = CLITOR_VERSION_STR,
+            .title      = args_.title,
             .width      = args_.width,
             .height     = args_.height,
             .srf_bgn_as = args_.bgnas,
@@ -723,7 +771,7 @@ public:
                 return OK;
             },
             .loop_cb    = [ this ] ( const auto& args_ ) { 
-                return this->_uix_frame( args_ );
+                return _uix_frame( args_ );
             },
             .exit_cb    = [ this ] ( const auto& args_ ) { 
                 if( _config.uix_bound ) push( [ this ] { daemon_stop(); } );
@@ -806,44 +854,54 @@ protected:
         const auto* focus = _uix->focus.load( std::memory_order_relaxed );
         if( not focus ) [[likely]] {
             ImGui::Begin( CLITOR_VERSION_STR, nullptr, 
-                ImGuiWindowFlags_NoDecoration          |
-                ImGuiWindowFlags_NoMove                |
-                ImGuiWindowFlags_NoResize              |  
+                ImGuiWindowFlags_NoDecoration |
+                ImGuiWindowFlags_NoMove |
+                ImGuiWindowFlags_NoResize |  
                 ImGuiWindowFlags_NoSavedSettings
             );
 
             if( ImGui::BeginTable( "##tbl-proxy-dock-split", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV ) ) {
-                ImGui::TableSetupColumn( "##proxy-zone", ImGuiTableColumnFlags_WidthFixed, 150.0f );
+                ImGui::TableSetupColumn( "##proxy-zone", ImGuiTableColumnFlags_WidthFixed, 196 );
                 ImGui::TableSetupColumn( "##dock-zone", ImGuiTableColumnFlags_WidthStretch );
 
                 ImGui::TableNextColumn(); {
-                    ImGui::Text( "cliTor" );
                     ImGui::Separator();
+
+                    static constexpr const char* const ANIM_STRS[ 5 ] = {
+                        "   (O)   ",
+                        "  (( ))  ",
+                        " ((   )) ",
+                        "((  .  ))",
+                        "(   o   )"
+                    };
+                    const char* crt_anim_str = ANIM_STRS[ static_cast< int >( args_.t*5 ) % 5 ];
+                    ImGui::TextUnformatted( crt_anim_str, crt_anim_str+9 );
+
+                    ImGui::SeparatorText( "Proxy Zone" );
                     
-                    int proxy_id = 0x0; for( auto& proxy : *_proxy_tbl.watch() ) {
-                        ASSERT_OR( not proxy.first.starts_with( "#" ) ) continue;
+                    for( auto& [ id, pxen ] : *_proxy_tbl.watch() ) {
+                        ASSERT_OR( not id.starts_with( "#" ) ) continue;
 
-                        ImGui::PushID( proxy_id );
+                        ImGui::PushID( &*id.cbegin(), &*id.cend() );
+                            ImGuiTreeNodeFlags col_hdr_flags = ImGuiTreeNodeFlags_DefaultOpen;
 
-                    //# Check if the proxy zone is expanded, immediately following the middle click auto install.
-                    //# Execute the proxy header uix frame after.
-                        const bool proxy_header_expanded   = ImGui::CollapsingHeader( proxy.first.c_str(), ImGuiTreeNodeFlags_None );
-                        bool       proxy_will_auto_install = ImGui::IsItemHovered() 
-                                                             and 
-                                                             ( ImGui::IsMouseClicked( ImGuiMouseButton_Middle ) or rgh::Immersive::ctrl( ImGuiKey_T ) );
-        
-                        if( proxy_header_expanded ) {
+                            const bool uix_frm_ovr = pxen->_static_fields.uix.has_basic_uix_frame_overridden;
+                            if( not uix_frm_ovr ) col_hdr_flags |= ImGuiTreeNodeFlags_Bullet;
 
-                        }
-                        if( proxy_will_auto_install ) {
-                            push( [ this, pn = proxy.first ] {
-                                proxy_pass( pn, "install" );
-                            } );
-                        }
+                            const bool proxy_header_expanded = ImGui::CollapsingHeader( id.c_str(), col_hdr_flags );
+                            bool proxy_will_auto_install = ImGui::IsItemHovered() and ( ImGui::IsMouseClicked( ImGuiMouseButton_Middle ) or rgh::Immersive::ctrl( ImGuiKey_T ) );
+            
+                            if( proxy_header_expanded and uix_frm_ovr ) {
+                                pxen->proxy_uix_frame( { args_ } );
+                            }
 
+                            if( proxy_will_auto_install ) {
+                                push( [ this, pxid = id ] { proxy_pass( pxid, "install" ); } );
+                            }
                         ImGui::PopID();
                     }
                 }
+
                 ImGui::TableNextColumn(); {
                     auto dock_tbl = _dock_tbl.watch(); ASSERT_OR( dock_tbl ) return ERR_BUSY;
 
@@ -852,10 +910,10 @@ protected:
                                                            ImGuiTabBarFlags_DrawSelectedOverline;
 
                     if( ImGui::BeginTabBar( "##tabs-dock", tab_bar_flags ) ) {
-                        int crtno = 0x0; 
                         for( auto& [ id, dock ] : *dock_tbl ) {
                             ASSERT_OR( not id.starts_with( '#' ) ) continue;
-                            ImGui::PushID( crtno );
+
+                            ImGui::PushID( &*id.cbegin(), &*id.cend() );
                                 bool tab_open = true;
 
                                 const ImGuiTabItemFlags tab_item_flags = ImGuiTabItemFlags_None;
@@ -902,7 +960,7 @@ protected:
         }
 
         ImGui::End();
-        return this->daemon_is_started() ? OK : ERR_TERMINATED;
+        return daemon_is_started() ? OK : ERR_TERMINATED;
     }
 
 #pragma endregion UIX

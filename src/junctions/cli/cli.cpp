@@ -62,16 +62,10 @@ public:
 
             #include "cmds/pxp.inl"
             ,
-            #include "cmds/install.inl"
-            ,
-            #include "cmds/uninstall.inl"
-            ,
-            #include "cmds/cd.inl"
+            #include "cmds/dock.inl"
             ,
 
-            #include "cmds/uix_up.inl"
-            ,
-            #include "cmds/uix_down.inl"
+            #include "cmds/uix.inl"
             ,
 
             #include "cmds/inet.inl"

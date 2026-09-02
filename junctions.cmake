@@ -6,12 +6,14 @@
     # The built-in command line interpreter.
     add_junction( cli )
     # Modbus RTU & TCP tool.
-    add_junction( modbus )
+    #add_junction( modbus )
+    # SCPI protocol for lab instruments.
+    add_junction( scpi )
 # Base:
 
 # Specific junctions - ready-to-use tools for specific device or use case.
     # Topdon TC001 thermal camera tool. 
-    add_junction( topdon-TC001 )
+    #add_junction( topdon-TC001 )
 
 # Contract junctions - closed source or client apps.
 include( ${CMAKE_CURRENT_LIST_DIR}/closed_junctions.cmake )
