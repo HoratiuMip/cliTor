@@ -11,6 +11,13 @@
 #include <rgh/gep/dispenser.hpp>
 #include <rgh/osp/immersive.hpp>
 
+#define JUNCTION_PROXY_INSTALL(t, ...) \
+    static struct _junction_proxy_installer_##t##_t_ { \
+        _junction_proxy_installer_##t##_t_( void ) { \
+            BridgE.install_proxy( rgh::HVec< t >::make( __VA_ARGS__ ) ); \
+        } \
+    } _junction_proxy_installer_##t##_; 
+
 class Proxy {
 public: friend class Bridge;
         friend class Proxy_Directive;
