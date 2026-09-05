@@ -1,5 +1,7 @@
 build/
 .vscode/
 
+# Built-in junctions
+selected_junctions.cmake
 # External junctions
 closed_junctions.cmake
