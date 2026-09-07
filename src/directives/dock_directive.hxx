@@ -52,6 +52,13 @@ public:
  */
     std::string dock_id( void ) const { return _dock_id; }
 /**
+ * @brief Returns the id without the flagging information.
+ */
+    const char* dock_id_c_str( void ) const { 
+        const int forced_ord_id_offset = _dock_id.starts_with( '/' ) ? 2 : 0;
+        return &_dock_id[ forced_ord_id_offset ];
+    }
+/**
  * @brief This function informs the bridge that this dock may never be uninstalled.
  * @note The macro JUNCTION_DOCK_IS_PERSISTENT is provided to override this function.
  */

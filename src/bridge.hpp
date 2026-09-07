@@ -305,94 +305,7 @@ protected:
     }
 #pragma endregion DAEMON
 
-#pragma region PROXY
-protected:
-    void _proxy_entry_populate_static_fields(
-        IN   _proxy_entry_t&   pxen_
-    ) {
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wpmf-conversions"
-        pxen_->_static_fields.uix.has_basic_uix_frame_overridden = RGH_ILL_HAS_OVERRIDDEN( pxen_.ref.get(), Proxy::proxy_uix_frame );
-    #pragma GCC diagnostic pop
-    }
 
-public:
-    status_t install_proxy(
-        IN   rgh::HVec< Proxy >&&   proxy_
-    ) {
-    //# Checl for a valid proxy, i.e. valid pointer and non-empty name.
-        ASSERT_OR( proxy_ ) {
-            logger->error( "bridge: install proxy: null proxy." );
-            return ERR_BADARG;
-        }
-        auto pn = proxy_->proxy_get_name();
-        ASSERT_OR( not pn.empty() ) {
-            logger->error( "bridge: install proxy: empty name." );
-            return ERR_BADARG;
-        }
-
-    //# Acquire control over the proxy table and install it if it does not already exist.
-        auto proxy_tbl = _proxy_tbl.control();
-        ASSERT_OR( proxy_tbl ) {
-            logger->error( "bridge: install proxy (\"{}\"): bad table control.", pn );
-            return ERR_BUSY;
-        }
-
-        auto& proxy = ( *proxy_tbl )[ std::string{ pn } ];
-        ASSERT_OR( not proxy.ref ) {
-            proxy_tbl.release();
-            logger->error( "bridge: install proxy (\"{}\"): already installed.", pn );
-            return ERR_WOULD_OVRWR; 
-        }
-
-        proxy.ref = std::move( proxy_ );
-        if( auto dock = proxy.ref->proxy_as_dock(); dock ) {
-            install_dock( proxy.ref->proxy_get_name().cbegin(), rgh::HVec< Dock >{ rgh::hvec_weak_ptr_t{ dock } } );
-        }
-        _proxy_entry_populate_static_fields( proxy );
-        proxy_tbl.release();
-
-        logger->info( "bridge: installed proxy: \"{}\".", pn );
-        return OK;
-    }
-
-    status_t uninstall_proxy(
-        IN   const std::string&   pn_
-    ) {
-    //# Acquire control over the proxy table and erase the matching entry.
-        auto proxy_tbl = _proxy_tbl.control();
-        
-        ASSERT_OR( proxy_tbl ) {
-            logger->error( "bridge: uninstall proxy ({}): bad table control.", pn_ );
-            return ERR_BUSY;
-        }
-
-        proxy_tbl->erase( pn_ );
-        proxy_tbl.release();
-
-        logger->info( "bridge: uninstalled proxy: \"{}\".", pn_ );
-        return OK;
-    }
-
-    status_t proxy_pass(
-        IN   const std::string&   pn_,
-        IN   std::string          line_
-    ) {
-        auto proxy_tbl = _proxy_tbl.control();
-        ASSERT_OR( proxy_tbl ) {
-            logger->error( "bridge: proxy pass ({}): bad table lock.", pn_ );
-            return ERR_BUSY;
-        }
-
-        auto proxy = proxy_tbl->find( pn_ ); 
-        ASSERT_OR( proxy != proxy_tbl->end() ) {
-            logger->error( "bridge: proxy pass: no such proxy: {}.", pn_ );
-            return ERR_NOT_FOUND;
-        }
-
-        return proxy->second.ref->proxy_pass( std::move( line_ ) );
-    }
-#pragma endregion PROXY
 
 #pragma region DOCK
 protected:
@@ -423,13 +336,6 @@ protected:
         Dock& dock = *dken_.ref;
 
         dock._uix_pack = dock.dock_uix_begin();
-    }
-
-    const char* _dock_id_c_str(
-        IN   const std::string&   id_
-    ) {
-        const int forced_ord_id_offset = id_.starts_with( '/' ) ? 2 : 0;
-        return &id_[ forced_ord_id_offset ];
     }
 
     void _dock_drop_hooks(
