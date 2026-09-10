@@ -877,7 +877,7 @@ protected:
                     const char* crt_anim_str = ANIM_STRS[ static_cast< int >( args_.t*5 ) % 5 ];
                     ImGui::TextUnformatted( crt_anim_str, crt_anim_str+9 );
 
-                    ImGui::SeparatorText( "Proxy Zone" );
+                    ImGui::Separator();
                     
                     for( auto& [ id, pxen ] : *_proxy_tbl.watch() ) {
                         ASSERT_OR( not id.starts_with( "#" ) ) continue;
