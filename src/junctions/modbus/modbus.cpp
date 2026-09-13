@@ -13,16 +13,11 @@ public:
     : cli{
         {},
         { 
-#include "cmds/tcp.inl"
-,
-
-#include "cmds/wc.inl"
-,
-#include "cmds/wcns.inl"        
-,
-#include "cmds/wr.inl"
-,
-#include "cmds/wrns.inl"
+        #include "cmds/uplink.inl"
+        ,
+        #include "cmds/read.inl"
+        ,
+        #include "cmds/write.inl"
         }
     } {}
 
