@@ -6,7 +6,7 @@
 #
 # DETAILS: Dock related stuff.
 */
-#include "general.hxx"
+#include "gateway_directive.hxx"
 
 #include <rgh/gep/dispenser.hpp>
 #include <rgh/osp/immersive.hpp>
@@ -120,4 +120,63 @@ public:
 protected:
     std::shared_ptr< UIX_pack >   _uix_pack   = nullptr;
 #pragma endregion UIX
+};
+
+class Dock_Directive : virtual public Gateway {
+public: friend class Bridge;
+
+protected:
+    struct _dock_key_t {
+        std::string   id   = {};
+
+        struct less {
+            using is_transparent = void;
+
+            inline bool operator () ( const _dock_key_t& lhs_, const _dock_key_t& rhs_ ) const { return lhs_.id < rhs_.id; }
+            inline bool operator () ( const _dock_key_t& lhs_, std::string rhs_ ) const { return lhs_.id < rhs_; }
+            inline bool operator () ( const _dock_key_t& lhs_, std::string_view rhs_ ) const { return lhs_.id < rhs_; }
+            inline bool operator () ( const _dock_key_t& lhs_, const char* rhs_ ) const { return lhs_.id < rhs_; }
+        };
+    };
+    struct _dock_entry_t {
+        rgh::HVec< Dock >   ref   = nullptr;
+
+        inline auto operator->() const { return ref.operator->(); }
+    };
+
+protected:
+    rgh::Dispenser< std::map< _dock_key_t, _dock_entry_t, _dock_key_t::less > >   _dock_tbl   = { rgh::DispenserMode_Lock };
+
+protected:
+    void _dock_entry_set_id(
+        IN   _dock_entry_t&   dken_,
+        IN   std::string      id_
+    );
+
+    void _dock_entry_make_logger(
+        IN   _dock_entry_t&   dken_
+    );
+
+    void _dock_entry_load_uix(
+        IN   _dock_entry_t&   dken_
+    );
+
+    void _dock_drop_hooks(
+        IN   _dock_entry_t&   dken_
+    );
+
+public:
+    ret_t install_dock(
+        IN   std::string           id_,
+        IN   rgh::HVec< Dock >&&   dock_
+    );
+
+    ret_t uninstall_dock(
+        IN   std::string_view   id_
+    );
+
+    rgh::HVec< Dock > dock_by_id( 
+        IN   std::string_view   id_,
+        IN   int                tol_ = 0
+    );
 };

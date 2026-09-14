@@ -8,8 +8,6 @@
 */
 #include "proxy_directive.hxx"
 
-CLITOR_NAMESPACE {
-
 void Proxy_Directive::_proxy_entry_populate_static_fields(
         IN   _proxy_entry_t&   pxent_
 ) {
@@ -79,5 +77,3 @@ status_t Proxy_Directive::proxy_pass(
 
     return pxref->proxy_pass( std::move( line_ ) );
 }
-
-}//# CLITOR_NAMESPACE

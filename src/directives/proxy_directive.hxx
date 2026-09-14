@@ -6,7 +6,8 @@
 #
 # DETAILS: Proxy related stuff.
 */
-#include "general.hxx"
+#include "gateway_directive.hxx"
+#include "dock_directive.hxx"
 
 #include <rgh/gep/dispenser.hpp>
 #include <rgh/osp/immersive.hpp>
@@ -85,7 +86,7 @@ public:
 #pragma endregion UIX
 };
 
-class Proxy_Directive {
+class Proxy_Directive : virtual public Gateway {
 public: friend class Bridge;
 
 protected:
