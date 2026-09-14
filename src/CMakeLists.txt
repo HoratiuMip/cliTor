@@ -39,4 +39,4 @@ macro( add_junction_ex junc_ dir_ )
     target_include_directories( ${JUNCTION_NAME} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/" )
 endmacro()
 
-include( "${CMAKE_CURRENT_LIST_DIR}/../selected_junctions.cmake" )
+include( "${CMAKE_CURRENT_LIST_DIR}/../junctions_sel.cmake" )
