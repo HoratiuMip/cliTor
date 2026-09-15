@@ -6,7 +6,7 @@
 #
 # DETAILS: Dock related stuff.
 */
-#include "gateway_directive.hxx"
+#include "../descriptor.hxx"
 
 #include <rgh/gep/dispenser.hpp>
 #include <rgh/osp/immersive.hpp>
@@ -32,6 +32,8 @@
     ASSERT_AND( imm and uix_pack )
     
 #define JUNCTION_DOCK_UIX_REINTR_PACK( pack_t_ ) auto* pack = reinterpret_cast< pack_t_* >( args_.pack );    
+
+CLITOR_NAMESPACE {
 
 class Dock {
 public: friend class Bridge;
@@ -122,8 +124,8 @@ protected:
 #pragma endregion UIX
 };
 
-class Dock_Directive : virtual public Gateway {
-public: friend class Bridge;
+class Dock_Directive {
+public: _DIRECTIVE_FRIENDS
 
 protected:
     struct _dock_key_t {
@@ -180,3 +182,5 @@ public:
         IN   int                tol_ = 0
     );
 };
+
+}//# CLITOR_NAMESPACE

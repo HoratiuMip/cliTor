@@ -6,7 +6,7 @@
 #
 # DETAILS: Proxy related stuff.
 */
-#include "gateway_directive.hxx"
+#include "../descriptor.hxx"
 #include "dock_directive.hxx"
 
 #include <rgh/gep/dispenser.hpp>
@@ -18,6 +18,8 @@
             BridgE.install_proxy( rgh::HVec< t >::make( __VA_ARGS__ ) ); \
         } \
     } _junction_proxy_installer_##t##_; 
+
+CLITOR_NAMESPACE {
 
 class Proxy {
 public: friend class Bridge;
@@ -86,8 +88,8 @@ public:
 #pragma endregion UIX
 };
 
-class Proxy_Directive : virtual public Gateway {
-public: friend class Bridge;
+class Proxy_Directive {
+public: _DIRECTIVE_FRIENDS
 
 protected:
     struct _proxy_key_t {
@@ -131,3 +133,5 @@ public:
     );
 #pragma endregion PROXY
 };
+
+}//#CLITOR_NAMESPACE
