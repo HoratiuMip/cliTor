@@ -1,5 +1,6 @@
-BUILD_DIR =  build
-PREFIX    ?= /usr
+BUILD_DIR   =  build
+PREFIX      ?= /usr
+CMAKE_FLAGS ?=
 
 .PHONY: all config install wipe
 
@@ -12,7 +13,7 @@ config:
 	mkdir -p $(BUILD_DIR)
 
 	@echo -n "[cliTor] running CMake script: "
-	cd ${BUILD_DIR} && cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) ../src
+	cd ${BUILD_DIR} && cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) ${CMAKE_FLAGS} ../src
 
 install:
 	@echo -n "[cliTor] installing: "
