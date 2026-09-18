@@ -312,7 +312,7 @@ protected:
     ) {
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wpmf-conversions"
-        pxen_->_static_fields.uix.has_basic_uix_frame_overridden = RGH_ILL_HAS_OVERRIDDEN( pxen_.ref.get(), Proxy::proxy_uix_frame );
+        pxen_->_static_fields.uix.has_basic_uix_frame_overridden = 1;
     #pragma GCC diagnostic pop
     }
 

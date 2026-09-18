@@ -12,7 +12,6 @@ if( NOT DEFINED RGH_ROOT_DIR )
 endif()
 include( "${RGH_ROOT_DIR}/tools.cmake" )
 
-set( RGH_TARGET_PLATE "OS" )
 set( RGH_EXCOM_POPCOUNT "yyyyyyn" )
 
 add_subdirectory( "${RGH_ROOT_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/regolith-lain" )
