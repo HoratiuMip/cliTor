@@ -1,4 +1,4 @@
-BUILD_DIR   =  build
+BUILD_DIR   ?= build
 PREFIX      ?= /usr
 CMAKE_FLAGS ?=
 
@@ -9,7 +9,7 @@ all:
 	cd $(BUILD_DIR) && $(MAKE) -j
 
 config:
-	@echo -n "[cliTor] jumping into the build directory: "
+	@echo -n "[cliTor] making the build directory: "
 	mkdir -p $(BUILD_DIR)
 
 	@echo -n "[cliTor] running CMake script: "
@@ -17,8 +17,8 @@ config:
 
 install:
 	@echo -n "[cliTor] installing: "
-	cd $(BUILD_DIR) && sudo cmake --install . --component cliTor
+	cd $(BUILD_DIR) && cmake --install . --component cliTor
 
 wipe:
-	@echo -n "[cliTor] cleaning: "
+	@echo -n "[cliTor] wiping: "
 	rm -rf $(BUILD_DIR)
