@@ -39,3 +39,8 @@ macro( add_junction_ex junc_ dir_ )
 endmacro()
 
 include( "${CMAKE_CURRENT_LIST_DIR}/../junctions_sel.cmake" )
+
+install( TARGETS ${PROJECT_NAME} 
+    RUNTIME DESTINATION bin 
+    COMPONENT ${PROJECT_NAME}
+)
