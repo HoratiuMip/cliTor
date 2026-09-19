@@ -1,7 +1,6 @@
 build*/
 .vscode/
+.cache
 
-# Selected junctions
-junctions_sel.cmake
-# Special junctions
-junctions_spe.cmake
+# Selected junctions.
+junctions.json
