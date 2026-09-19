@@ -15,16 +15,27 @@ if( NOT EXISTS ${cliTor_File_JunctionsJson} )
     message( FATAL_ERROR "[cliTor] The file \"junctions.json\" was not found. See docs on how to add it manually or use make.py." )
 endif()
 
-# ===== regolith-lain BAS begin =====
-if( NOT DEFINED RGH_ROOT_DIR )
-    set( RGH_ROOT_DIR $ENV{RGH_ROOT_DIR} )
-endif()
-include( ${RGH_ROOT_DIR}/tools.cmake )
-
+# ===== regolith-lain ===== #
 set( RGH_EXCOM_POPCOUNT "yyyyyyn" )
 
-add_subdirectory( ${RGH_ROOT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/regolith-lain/ )
-# ===== regolith-lain BAS end =====
+if( NOT DEFINED RGH_ROOT_DIR )
+    if( DEFINED ENV{RGH_ROOT_DIR} )
+        message( STATUS "[cliTor] Found root directory of regolith-lain in environment variable." )
+        set( RGH_ROOT_DIR $ENV{RGH_ROOT_DIR} )
+        add_subdirectory( ${RGH_ROOT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/regolith-lain/ )
+    else()
+        message( STATUS "[cliTor] Root directory of regolith-lain not found, cloning..." )
+        FetchContent_Declare(
+            regolith_lain
+            GIT_REPOSITORY https://github.com/HoratiuMip/regolith-lain.git
+            GIT_TAG 8cafbd1
+        )
+        FetchContent_MakeAvailable( regolith_lain )
+        set( RGH_ROOT_DIR ${regolith_lain_SOURCE_DIR} )
+    endif()
+endif()
+include( ${RGH_ROOT_DIR}/tools.cmake )
+# ===== regolith-lain ===== #
 
 add_executable( ${PROJECT_NAME} main.cpp )
 target_link_libraries( ${PROJECT_NAME} PRIVATE rgh::libosp )
