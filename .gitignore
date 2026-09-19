@@ -2,5 +2,7 @@ build*/
 .vscode/
 .cache
 
+imgui.ini
+
 # Selected junctions.
 junctions.json

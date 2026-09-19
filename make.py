@@ -1,16 +1,12 @@
 """
-CAUTION:
-    This file is MOSTLY GENERATED, MOSTLY UNCHECKED black box.
+CAUTION: This file is MOSTLY GENERATED, MOSTLY UNCHECKED black box.
 
-NAME:
-    cliTor//pymake - configure, build and install cliTor via a friendly python interface.
+NAME: cliTor//pymake - configure, build and install cliTor via a friendly python interface.
 
 MANUAL:
     
-
-AUTHORS(s): 
-    Claude Opus 5
-    Vatca "Mipsan" Tudor-Horatiu
+AUTHORS(s): Claude Opus 5
+            Vatca "Mipsan" Tudor-Horatiu
 """
 
 import json
@@ -19,7 +15,7 @@ import sys
 import tkinter as tk
 from pathlib import Path
 
-#————————————————————————— Config —————————————————————————#
+#————————————————————————— Config ———————————————————————————#
 JUNCTIONS_DIR = Path("./src/junctions")
 CONFIG_FILE   = Path("./junctions.json")
 C             = {
@@ -45,7 +41,7 @@ def pick_font():
             return name
     return "TkFixedFont"
 
-#————————————————————————— Data —————————————————————————#
+#————————————————————————— Data —————————————————————————————#
 def discover_short_junctions():
     """Folder names directly under ./src/junctions (not recursive)."""
     if not JUNCTIONS_DIR.is_dir():
@@ -91,7 +87,7 @@ def write_config(short_names, typed_lines):
         fh.write("\n")
     return len(selected)
 
-#————————————————————————— Widgets —————————————————————————#
+#————————————————————————— Widgets ———————————————————————————#
 class JunctionRow(tk.Frame):
     """One checkbox row, drawn by hand so it matches the theme."""
 
