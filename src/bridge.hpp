@@ -875,7 +875,7 @@ protected:
                         "(   o   )"
                     };
                     const char* crt_anim_str = ANIM_STRS[ static_cast< int >( args_.t*5 ) % 5 ];
-                    ImGui::TextUnformatted( crt_anim_str, crt_anim_str+9 );
+                    //ImGui::TextUnformatted( crt_anim_str, crt_anim_str+9 );
 
                     ImGui::Separator();
                     
@@ -933,7 +933,6 @@ protected:
                                 if( not tab_open ) { push( [ this, id ] { uninstall_dock( id ); } ); }
                             ImGui::PopID();
                         }
-
                         ImGui::EndTabBar();
                     }
                 }
