@@ -33,6 +33,8 @@ if( NOT DEFINED RGH_ROOT_DIR )
         FetchContent_MakeAvailable( regolith_lain )
         set( RGH_ROOT_DIR ${regolith_lain_SOURCE_DIR} )
     endif()
+else()
+    add_subdirectory( ${RGH_ROOT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/regolith-lain/ )
 endif()
 include( ${RGH_ROOT_DIR}/tools.cmake )
 # ===== regolith-lain ===== #
