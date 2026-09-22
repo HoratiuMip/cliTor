@@ -42,13 +42,14 @@
                     break;
                 }   
 
+                std::tm tm_buf{};
+                localtime_r( reinterpret_cast< std::time_t* >( &ntp_packet->ts.tx_s ), &tm_buf );
+                char buf[ 32 ]; std::strftime( buf, sizeof( buf ), "%Y-%m-%d %H:%M:%S", &tm_buf );
+                
                 JUNCTION_DOCK_LOGI( 
                     "qinet ntp: current NTP unix time:\n{} - {}", 
                     ntp_packet->ts.tx_s, 
-                    std::format( 
-                        "{:%Y-%m-%d %H:%M:%S}", 
-                        std::chrono::zoned_time{ std::chrono::current_zone(), std::chrono::sys_seconds{ std::chrono::seconds{ ntp_packet->ts.tx_s } } } 
-                    )
+                    buf
                 );
 
             break; }

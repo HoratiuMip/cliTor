@@ -5,7 +5,8 @@
 
 #include <rgh/brp/IO_utils.hpp>
 #include <rgh/osp/IO_sockets.hpp>
-#include <rgh/osp/IO_utils.hpp>
+#include <rgh/osp/IO_serial_utils.hpp>
+#include <rgh/osp/IO_inet_utils.hpp>
 
 #include <bridge.hpp>
 JUNCTION_HEADER( cli, "#cli" )

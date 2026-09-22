@@ -1,7 +1,8 @@
-build/
+build*/
 .vscode/
+.cache
 
-# Built-in junctions
-junctions_open.cmake
-# External junctions
-junctions_closed.cmake
+imgui.ini
+
+# Selected junctions.
+junctions.json

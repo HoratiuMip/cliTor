@@ -1,5 +1,5 @@
 #include "bridge.hpp"
-Bridge BridgE;
+Bridge __attribute__((init_priority(101))) BridgE;
 
 int main( int argc_, char* argv_[] ) {
     rgh::init( argc_, argv_, rgh::init_args_t{
