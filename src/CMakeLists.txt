@@ -31,7 +31,7 @@ if( NOT DEFINED RGH_ROOT_DIR )
         FetchContent_Declare(
             regolith_lain
             GIT_REPOSITORY https://github.com/HoratiuMip/regolith-lain.git
-            GIT_TAG 8cafbd1
+            GIT_TAG 9e9bef1f466c5a1320ffdb6a598d8946b49e6376
         )
         FetchContent_MakeAvailable( regolith_lain )
         set( RGH_ROOT_DIR ${regolith_lain_SOURCE_DIR} )

@@ -3,7 +3,7 @@
 # DESCRIPTION: Top level makefile for cliTor.
 #
 # MANUAL: When building cliTor using this makefile, you must call "make config", "make", and, optionally, "make install". 
-#         You may pass extra desired arguments to CMake via CMAKE_ARGS.
+#         You may pass extra desired arguments to CMake via CMAKE_PASS.
 #		  After the build is completed, you may call "make run" to execute your freshly built app.
 #
 # EXAMPLE: [1]: make config && make && sudo make install
@@ -13,7 +13,7 @@
 
 BUILD_DIR  ?= build
 PREFIX     ?= /usr
-CMAKE_ARGS ?=
+CMAKE_PASS ?=
 PY         ?= python
 
 ifeq ( $(OS), Windows_NT )
@@ -40,7 +40,7 @@ config:
 	${MKDIR} $(BUILD_DIR)
 
 	@${PRINT} "[cliTor] running CMake script: "
-	cd ${BUILD_DIR} && cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) -Wno-deprecated ${CMAKE_ARGS} ../src
+	cd ${BUILD_DIR} && cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) -Wno-deprecated ${CMAKE_PASS} ../src
 
 .PHONY: install
 install:

@@ -11,6 +11,9 @@ MANUAL: Run this script using "<your_python_interpreter> make.py" or "make gui".
         The current status is displayed above the buttons. The buttons are BLOCKING the GUI, so be
           patient. If any commands (config, build, etc.) exit unsuccessfully, their STDOUT and STDERR
           will be printed to the console.
+
+        Even though the GUI is blocked during command execution, you can click the other buttons and they
+          will execute after the current command is finished.
     
 AUTHORS(s): Claude Opus 5
             Vatca "Mipsan" Tudor-Horatiu
@@ -19,6 +22,7 @@ AUTHORS(s): Claude Opus 5
 import os
 import sys
 import subprocess
+import platform
 
 # from functools import partial as fnc_bind
 
@@ -42,6 +46,8 @@ C             = {
     "text":      "#c3d2e6",
     "muted":     "#4e5f7a",
 }
+MAKES_TO_SEARCH = ["make", "mingw32-make"]
+ENV_FORMAT_WIDTH = 32
 
 def pick_font():
     """Pick the first available monospace family."""
@@ -52,6 +58,9 @@ def pick_font():
         if name in available:
             return name
     return "TkFixedFont"
+
+def fmt_kdv(key, val):
+    return (key + ' ').ljust(ENV_FORMAT_WIDTH - len(val), '.') + ' ' + val
 
 #————————————————————————— Data —————————————————————————————#
 def discover_short_junctions():
@@ -192,6 +201,15 @@ def rule(master, color, pad=(0, 0)):
 #————————————————————————— Interface —————————————————————————#
 class Interface(tk.Tk):
     def __init__(self):
+        self.MAKE = ""
+        for make in MAKES_TO_SEARCH:
+            try:
+                if subprocess.run([make, "--version"]).returncode == 0x0:
+                    self.MAKE = make
+                    break
+            except:
+                continue
+
         super().__init__()
         self.title("cliTor//makepie")
         self.configure(bg=C["bg"])
@@ -211,14 +229,16 @@ class Interface(tk.Tk):
         head = tk.Frame(self, bg=C["bg"])
         head.pack(fill="x", padx=22, pady=(20, 0))
 
-        tk.Label(head, text="cliTor//makepie", font=(self.font, 19, "bold"),
-                 bg=C["bg"], fg=C["cyan"]).pack(anchor="w")
+        tk.Label(head, text="cliTor//makepie", font=(self.font, 19, "bold"), bg=C["bg"], fg=C["cyan"]).pack(anchor="w")
         rule(head, C["magenta"], pad=(10, 0))
 
-        source = "Built-in junctions:" if JUNCTIONS_DIR.is_dir() else \
-            f"{JUNCTIONS_DIR} (missing)"
-        tk.Label(head, text=source, font=(self.font, 10), bg=C["bg"],
-                 fg=C["gold"]).pack(anchor="w", pady=(8, 0))
+        tk.Label(head, text="Environment", font=(self.font, 10), bg=C["bg"], fg=C["gold"]).pack(anchor="w", pady=(8, 0))
+        tk.Label(head, text=fmt_kdv("OS:", platform.system()), font=(self.font,10), bg=C["bg"], fg=C["text"]).pack(anchor="w", pady=(8, 0))
+        tk.Label(head, text=fmt_kdv("Make:", self.MAKE), font=(self.font,10), bg=C["bg"], fg=C["text"]).pack(anchor="w", pady=(8, 0))
+        rule(head, C["magenta"], pad=(10, 0))
+
+        txt = "Built-in junctions:" if JUNCTIONS_DIR.is_dir() else f"{JUNCTIONS_DIR} (missing)"
+        tk.Label(head, text=txt, font=(self.font, 10), bg=C["bg"], fg=C["gold"]).pack(anchor="w", pady=(8, 0))
         
     def _build_list(self, selected):
         names = discover_short_junctions()
@@ -272,7 +292,7 @@ class Interface(tk.Tk):
         block = tk.Frame(self, bg=C["bg"])
         block.pack(fill="x", padx=22, pady=(16, 0))
 
-        rule(block, C["border"])
+        rule(block, C["magenta"])
         tk.Label(block, text="Other junctions: <name> <path>", font=(self.font, 10), bg=C["bg"], fg=C["gold"]).pack(anchor="w", pady=(10, 6))
 
         frame = tk.Frame(block, bg=C["border"])
@@ -296,7 +316,7 @@ class Interface(tk.Tk):
         block = tk.Frame(self, bg=C["bg"])
         block.pack(fill="x", padx=22, pady=(14, 18))
 
-        rule(block, C["border"], pad=(0, 12))
+        rule(block, C["magenta"], pad=(0, 12))
 
         self.status = tk.Label(block, text="", font=(self.font, 9), bg=C["bg"], fg=C["muted"], anchor="w")
         self.status.pack(fill="x", pady=(0, 10))
@@ -324,24 +344,39 @@ class Interface(tk.Tk):
             text=f"Wrote {CONFIG_FILE} — {count} junction(s).", fg=C["gold"])
 
     def on_config(self):
-        ret = subprocess.run(["make", "config"], capture_output=True, text=True)
+        cmake_args = [
+            f"-DRGH_TARGET_OS={platform.system()}"
+        ]
+
+        self.status.configure(text="Config...",fg=C["gold"])
+        self.update_idletasks()
+
+        ret = subprocess.run(["make", "config", f"CMAKE_PASS=\"{','.join(cmake_args)}\""], capture_output=True, text=True)
+
         if ret.returncode == 0x0:
-            self.status.configure(text=f"Configuration — exited successfully.", fg=C["gold"])
+            self.status.configure(text=f"Config — ok.", fg=C["gold"])
         else:
-            self.status.configure(text=f"Configuration — error, exit code: {ret.returncode}.", fg=C["magenta"])
+            self.status.configure(text=f"Config — error, exit code: {ret.returncode}.", fg=C["magenta"])
             print(f"[cliTor//makepie] STDOUT of command:\n{ret.stdout}\n\n[cliTor//makepie] STDERR of command:\n{ret.stderr}\n")
 
     def on_build(self):
+        self.status.configure(text="Build...",fg=C["gold"])
+        self.update_idletasks()
+
         ret = subprocess.run(["make"], capture_output=True, text=True)
+
         if ret.returncode == 0x0:
-            self.status.configure(text=f"Build — exited successfully.", fg=C["gold"])
+            self.status.configure(text=f"Build — ok.", fg=C["gold"])
         else:
             self.status.configure(text=f"Build — error, exit code: {ret.returncode}.", fg=C["magenta"])
             print(f"[cliTor//makepie] STDOUT of command:\n{ret.stdout}\n\n[cliTor//makepie] STDERR of command:\n{ret.stderr}\n")
 
     def on_run(self):
-        ret = subprocess.run(["make", "run"], capture_output=True, text=True)
-        self.status.configure(text=f"Running — process returned {ret.returncode}.", fg=C["gold"] if ret.returncode == 0x0 else C["magenta"] )
+        self.status.configure(text="Run...",fg=C["gold"])
+        self.update_idletasks()
+        proc = subprocess.Popen(["make", "run"])
+        ret = proc.wait()
+        self.status.configure(text=f"Run — process returned {ret}.", fg=C["gold"] if ret == 0x0 else C["magenta"] )
 
 if __name__ == "__main__":
     Interface().mainloop()
