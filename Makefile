@@ -40,7 +40,7 @@ config:
 	${MKDIR} $(BUILD_DIR)
 
 	@${PRINT} "[cliTor] running CMake script: "
-	cd ${BUILD_DIR} && cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) ${CMAKE_ARGS} ../src
+	cd ${BUILD_DIR} && cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) -Wno-deprecated ${CMAKE_ARGS} ../src
 
 .PHONY: install
 install:

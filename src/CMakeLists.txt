@@ -9,6 +9,9 @@ set( CMAKE_CXX_STANDARD_REQUIRED ON )
 include( FetchContent )
 set( BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE )
 
+add_compile_options( -ffunction-sections -fdata-sections )
+add_link_options( "-Wl,--gc-sections" "-Wl,-O1" )
+
 # Check for the junctions.json configuration file.
 set( cliTor_File_JunctionsJson ${CMAKE_CURRENT_LIST_DIR}/../junctions.json )
 if( NOT EXISTS ${cliTor_File_JunctionsJson} )
@@ -41,6 +44,7 @@ include( ${RGH_ROOT_DIR}/tools.cmake )
 
 add_executable( ${PROJECT_NAME} main.cpp )
 target_link_libraries( ${PROJECT_NAME} PRIVATE rgh::libosp )
+target_link_options( ${PROJECT_NAME} PRIVATE "-static-libstdc++" "-static-libgcc")
 
 target_include_directories( ${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/ )
 
