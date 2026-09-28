@@ -76,14 +76,15 @@ def _assert_sys_cmd(cmd: str) -> bool:
         return False
 
 def discover_env():
-    ENV["OS"]    = platform.system()
-    ENV["CMake"] = "Yes" if _assert_sys_cmd("cmake") else "No"
-    ENV["GCC"]   = "Yes" if _assert_sys_cmd("gcc") else "No"
+    ENV["OS"]    = f"\"{os}\"" if (os := platform.system()) else "NOT FOUND"
+    ENV["CMake"] = "OK" if _assert_sys_cmd("cmake") else "NOT FOUND"
+    ENV["GCC"]   = "OK" if _assert_sys_cmd("gcc") else "NOT FOUND"
     
     for make in ENV_MAKES_TO_SEARCH:
         if _assert_sys_cmd(make):
-            ENV["Make"] = make
+            ENV["Make"] = f"\"{make}\""
             break
+    ENV["Make"] = ENV["Make"] or "NOT FOUND"
 
 def discover_short_junctions():
     """Foldes directly under ./src/junctions, NOT recursive."""
