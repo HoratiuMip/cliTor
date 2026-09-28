@@ -46,8 +46,14 @@ C             = {
     "text":      "#c3d2e6",
     "muted":     "#4e5f7a",
 }
-MAKES_TO_SEARCH = ["make", "mingw32-make"]
-ENV_FORMAT_WIDTH = 32
+ENV_MAKES_TO_SEARCH = ["make", "mingw32-make"]
+ENV_FORMAT_WIDTH = 46
+ENV = {
+    "OS":    None,
+    "CMake": False,
+    "GCC":   False,
+    "Make":  None
+}
 
 def pick_font():
     """Pick the first available monospace family."""
@@ -63,6 +69,22 @@ def fmt_kdv(key, val):
     return (key + ' ').ljust(ENV_FORMAT_WIDTH - len(val), '.') + ' ' + val
 
 #————————————————————————— Data —————————————————————————————#
+def _assert_sys_cmd(cmd: str) -> bool:
+    try:
+        return subprocess.run([cmd, "--version"]).returncode == 0x0
+    except:
+        return False
+
+def discover_env():
+    ENV["OS"]    = platform.system()
+    ENV["CMake"] = "Yes" if _assert_sys_cmd("cmake") else "No"
+    ENV["GCC"]   = "Yes" if _assert_sys_cmd("gcc") else "No"
+    
+    for make in ENV_MAKES_TO_SEARCH:
+        if _assert_sys_cmd(make):
+            ENV["Make"] = make
+            break
+
 def discover_short_junctions():
     """Foldes directly under ./src/junctions, NOT recursive."""
     if not JUNCTIONS_DIR.is_dir():
@@ -201,23 +223,16 @@ def rule(master, color, pad=(0, 0)):
 #————————————————————————— Interface —————————————————————————#
 class Interface(tk.Tk):
     def __init__(self):
-        self.MAKE = ""
-        for make in MAKES_TO_SEARCH:
-            try:
-                if subprocess.run([make, "--version"]).returncode == 0x0:
-                    self.MAKE = make
-                    break
-            except:
-                continue
-
         super().__init__()
         self.title("cliTor//makepie")
         self.configure(bg=C["bg"])
-        self.geometry("640x840")
-        self.minsize(440, 640)
+        self.geometry("640x940")
+        self.minsize(640, 940)
 
         self.font = pick_font()
         self.rows = []
+
+        discover_env()
 
         short_selected, long_paths = load_config()
         self._build_header()
@@ -233,8 +248,8 @@ class Interface(tk.Tk):
         rule(head, C["magenta"], pad=(10, 0))
 
         tk.Label(head, text="Environment", font=(self.font, 10), bg=C["bg"], fg=C["gold"]).pack(anchor="w", pady=(8, 0))
-        tk.Label(head, text=fmt_kdv("OS:", platform.system()), font=(self.font,10), bg=C["bg"], fg=C["text"]).pack(anchor="w", pady=(8, 0))
-        tk.Label(head, text=fmt_kdv("Make:", self.MAKE), font=(self.font,10), bg=C["bg"], fg=C["text"]).pack(anchor="w", pady=(8, 0))
+        for var, val in ENV.items():
+            tk.Label(head, text=fmt_kdv(var, val), font=(self.font,10), bg=C["bg"], fg=C["text"]).pack(anchor="w", pady=(8, 0))
         rule(head, C["magenta"], pad=(10, 0))
 
         txt = "Built-in junctions:" if JUNCTIONS_DIR.is_dir() else f"{JUNCTIONS_DIR} (missing)"
