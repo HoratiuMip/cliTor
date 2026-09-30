@@ -43,7 +43,7 @@
         } 
 
         const auto tdiv = std::div( tms, 1'000 );
-        ASSERT_OR( modbus_set_response_timeout( ctx.get(), tdiv.quot, tdiv.rem*1'000 ) {
+        ASSERT_OR( modbus_set_response_timeout( ctx.get(), tdiv.quot, tdiv.rem*1'000 ) == 0x0 ) {
             JUNCTION_DOCK_LOGW( "bad set timeout {}ms to {}:{}: {}.", tms, ip, port, modbus_strerror( errno ) );
         }
 

@@ -83,7 +83,10 @@ foreach( idx RANGE ${_selcnt} )
 # External junction.
     else()
         string( JSON name GET ${sel} "name" )
-        add_junction_ex( ${name} ${path} )
+        string( FIND ${name} "#" hash_at )
+        if( NOT hash_at EQUAL 0 )
+            add_junction_ex( ${name} ${path} )
+        endif()
     endif()
 endforeach()
 
