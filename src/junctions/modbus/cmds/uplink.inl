@@ -4,16 +4,19 @@
         { .sh0rt = 'i', .l0ng = "ip", .arg = rgh::Fast_cli::argtext, .fast_id = 0x0 },
         { .sh0rt = 's', .l0ng = "slave-id", .arg = rgh::Fast_cli::argi32, .fast_id = 0x1 },
         { .sh0rt = 'p', .l0ng = "port", .arg = rgh::Fast_cli::argi32 },
+        { .sh0rt = 't', .l0ng = "timeout", .arg = rgh::Fast_cli::argi32 }
     },
     .fnc = [ this ] ( auto& C ) -> status_t {
         std::string          ip   = {};
         rgh::io::ipv4_port_t port = MODBUS_TCP_DEFAULT_PORT;
         int                  slv  = 0x1;
+        int                  tms  = 1'000;
 
         RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
             case 'i': ip   = C.text(); break;
             case 's': slv  = C.i32();  break;
             case 'p': port = C.i32();  break;
+            case 't': tms  = C.i32();  break;
         RGH_FASTCLI_OPT_SWITCH_END
 
         modbus_t* raw_ctx = modbus_new_tcp( ip.c_str(), port );
@@ -38,6 +41,11 @@
         ASSERT_OR( modbus_set_slave( ctx.get(), slv ) == 0x0 ) {
             JUNCTION_DOCK_LOGW( "bad set slave id {} to {}:{}: {}.", slv, ip, port, modbus_strerror( errno ) );
         } 
+
+        const auto tdiv = std::div( tms, 1'000 );
+        ASSERT_OR( modbus_set_response_timeout( ctx.get(), tdiv.quot, tdiv.rem*1'000 ) {
+            JUNCTION_DOCK_LOGW( "bad set timeout {}ms to {}:{}: {}.", tms, ip, port, modbus_strerror( errno ) );
+        }
 
         JUNCTION_DOCK_LOGI( "tcp'd to {}:{}.", ip, port );
         return OK;
