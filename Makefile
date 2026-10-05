@@ -16,23 +16,27 @@ PREFIX     ?= /usr
 CMAKE_PASS ?=
 PY         ?= python
 
-ifeq ( $(OS), Windows_NT )
+ifeq ($(OS),Windows_NT)
 	SHELL       := powershell.exe
     .SHELLFLAGS := -NoProfile -ExecutionPolicy Bypass -Command
 
 	PRINT = Write-Host -NoNewLine
     MKDIR = mkdir -Force
     RMDIR = rm -r -fo
+	CMAKE_GENERATOR = -G "MinGW Makefiles"
+	THEN = ;
 else
     PRINT = echo -n
     MKDIR = mkdir -p
     RMDIR = rm -rf
+	CMAKE_GENERATOR =
+	THEN = &&
 endif
 
 .PHONY: all
 all:
 	@${PRINT} "[cliTor] compiling: "
-	cd $(BUILD_DIR) && $(MAKE) -j
+	cd $(BUILD_DIR) ${THEN} $(MAKE) -j
 
 .PHONY: config
 config:
@@ -40,12 +44,12 @@ config:
 	${MKDIR} $(BUILD_DIR)
 
 	@${PRINT} "[cliTor] running CMake script: "
-	cd ${BUILD_DIR} && cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) -Wno-deprecated ${CMAKE_PASS} ../src
+	cd ${BUILD_DIR} ${THEN} cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) -Wno-deprecated CMAKE_GENERATOR ${CMAKE_PASS} ../src
 
 .PHONY: install
 install:
 	@${PRINT} "[cliTor] installing: "
-	cd $(BUILD_DIR) && cmake --install . --component cliTor
+	cd $(BUILD_DIR) ${THEN} cmake --install . --component cliTor
 
 .PHONY: clean
 clean:

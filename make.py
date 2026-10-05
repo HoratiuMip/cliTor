@@ -46,7 +46,7 @@ C             = {
     "text":      "#c3d2e6",
     "muted":     "#4e5f7a",
 }
-ENV_MAKES_TO_SEARCH = ["make", "mingw32-make"]
+ENV_MAKES_TO_SEARCH = ["make", "mingw32-make.exe", "mingw32-make"]
 ENV_FORMAT_WIDTH = 46
 ENV = {
     "OS":    None,
@@ -76,13 +76,13 @@ def _assert_sys_cmd(cmd: str) -> bool:
         return False
 
 def discover_env():
-    ENV["OS"]    = f"\"{os}\"" if (os := platform.system()) else "NOT FOUND"
+    ENV["OS"]    = f"{os}" if (os := platform.system()) else "NOT FOUND"
     ENV["CMake"] = "OK" if _assert_sys_cmd("cmake") else "NOT FOUND"
     ENV["GCC"]   = "OK" if _assert_sys_cmd("gcc") else "NOT FOUND"
     
     for make in ENV_MAKES_TO_SEARCH:
         if _assert_sys_cmd(make):
-            ENV["Make"] = f"\"{make}\""
+            ENV["Make"] = f"{make}"
             break
     ENV["Make"] = ENV["Make"] or "NOT FOUND"
 
@@ -367,31 +367,27 @@ class Interface(tk.Tk):
         self.status.configure(text="Config...",fg=C["gold"])
         self.update_idletasks()
 
-        ret = subprocess.run(["make", "config", f"CMAKE_PASS=\"{','.join(cmake_args)}\""], capture_output=True, text=True)
+        ret = subprocess.Popen([ENV["Make"], "config", f"CMAKE_PASS=\"{','.join(cmake_args)}\""]).wait()
 
-        if ret.returncode == 0x0:
+        if ret == 0x0:
             self.status.configure(text=f"Config — ok.", fg=C["gold"])
         else:
-            self.status.configure(text=f"Config — error, exit code: {ret.returncode}.", fg=C["magenta"])
-            print(f"[cliTor//makepie] STDOUT of command:\n{ret.stdout}\n\n[cliTor//makepie] STDERR of command:\n{ret.stderr}\n")
+            self.status.configure(text=f"Config — error, exit code: {ret}.", fg=C["magenta"])
 
     def on_build(self):
         self.status.configure(text="Build...",fg=C["gold"])
         self.update_idletasks()
+        ret = subprocess.Popen([ENV["Make"]]).wait()
 
-        ret = subprocess.run(["make"], capture_output=True, text=True)
-
-        if ret.returncode == 0x0:
+        if ret == 0x0:
             self.status.configure(text=f"Build — ok.", fg=C["gold"])
         else:
-            self.status.configure(text=f"Build — error, exit code: {ret.returncode}.", fg=C["magenta"])
-            print(f"[cliTor//makepie] STDOUT of command:\n{ret.stdout}\n\n[cliTor//makepie] STDERR of command:\n{ret.stderr}\n")
+            self.status.configure(text=f"Build — error, exit code: {ret}.", fg=C["magenta"])
 
     def on_run(self):
         self.status.configure(text="Run...",fg=C["gold"])
         self.update_idletasks()
-        proc = subprocess.Popen(["make", "run"])
-        ret = proc.wait()
+        ret = subprocess.Popen([ENV["Make"], "run"]).wait()
         self.status.configure(text=f"Run — process returned {ret}.", fg=C["gold"] if ret == 0x0 else C["magenta"] )
 
 if __name__ == "__main__":
