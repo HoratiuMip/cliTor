@@ -3,7 +3,7 @@
 # DESCRIPTION: Top level makefile for cliTor.
 #
 # MANUAL: When building cliTor using this makefile, you must call "make config", "make", and, optionally, "make install". 
-#         You may pass extra desired arguments to CMake via CMAKE_ARGS.
+#         You may pass extra desired arguments to CMake via CMAKE_PASS.
 #		  After the build is completed, you may call "make run" to execute your freshly built app.
 #
 # EXAMPLE: [1]: make config && make && sudo make install
@@ -13,26 +13,30 @@
 
 BUILD_DIR  ?= build
 PREFIX     ?= /usr
-CMAKE_ARGS ?=
+CMAKE_PASS ?=
 PY         ?= python
 
-ifeq ( $(OS), Windows_NT )
+ifeq ($(OS),Windows_NT)
 	SHELL       := powershell.exe
     .SHELLFLAGS := -NoProfile -ExecutionPolicy Bypass -Command
 
 	PRINT = Write-Host -NoNewLine
     MKDIR = mkdir -Force
     RMDIR = rm -r -fo
+	CMAKE_GENERATOR = -G "MinGW Makefiles"
+	THEN = ;
 else
     PRINT = echo -n
     MKDIR = mkdir -p
     RMDIR = rm -rf
+	CMAKE_GENERATOR =
+	THEN = &&
 endif
 
 .PHONY: all
 all:
 	@${PRINT} "[cliTor] compiling: "
-	cd $(BUILD_DIR) && $(MAKE) -j
+	cd $(BUILD_DIR) ${THEN} $(MAKE) -j
 
 .PHONY: config
 config:
@@ -40,12 +44,12 @@ config:
 	${MKDIR} $(BUILD_DIR)
 
 	@${PRINT} "[cliTor] running CMake script: "
-	cd ${BUILD_DIR} && cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) ${CMAKE_ARGS} ../src
+	cd ${BUILD_DIR} ${THEN} cmake -DCMAKE_INSTALL_PREFIX=$(PREFIX) -Wno-deprecated ../src ${CMAKE_GENERATOR} ${CMAKE_PASS}
 
 .PHONY: install
 install:
 	@${PRINT} "[cliTor] installing: "
-	cd $(BUILD_DIR) && cmake --install . --component cliTor
+	cd $(BUILD_DIR) ${THEN} cmake --install . --component cliTor
 
 .PHONY: clean
 clean:

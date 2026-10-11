@@ -1,19 +1,35 @@
 """
 CAUTION: This file is MOSTLY GENERATED, MOSTLY UNCHECKED black box.
 
-NAME: cliTor//pymake - configure, build and install cliTor via a friendly python interface.
+NAME: cliTor//makepie - configure, build and install cliTor via a friendly python interface.
 
-MANUAL:
+MANUAL: Run this script using "<your_python_interpreter> make.py" or "make gui".
+        Select the desired built-in junctions via the checkboxes. Optionally, add your external
+          junctions in the text box, one per line, "<junction_name> <path_to_junction>".
+        Configure, Build and Run the project.
+
+        The current status is displayed above the buttons. The buttons are BLOCKING the GUI, so be
+          patient. If any commands (config, build, etc.) exit unsuccessfully, their STDOUT and STDERR
+          will be printed to the console.
+
+        Even though the GUI is blocked during command execution, you can click the other buttons and they
+          will execute after the current command is finished.
     
 AUTHORS(s): Claude Opus 5
             Vatca "Mipsan" Tudor-Horatiu
 """
 
-import json
 import os
 import sys
-import tkinter as tk
+import subprocess
+import platform
+
+# from functools import partial as fnc_bind
+
+import json
 from pathlib import Path
+
+import tkinter as tk
 
 #————————————————————————— Config ———————————————————————————#
 JUNCTIONS_DIR = Path("./src/junctions")
@@ -30,6 +46,14 @@ C             = {
     "text":      "#c3d2e6",
     "muted":     "#4e5f7a",
 }
+ENV_MAKES_TO_SEARCH = ["make", "mingw32-make.exe", "mingw32-make"]
+ENV_FORMAT_WIDTH = 46
+ENV = {
+    "OS":    None,
+    "CMake": False,
+    "GCC":   False,
+    "Make":  None
+}
 
 def pick_font():
     """Pick the first available monospace family."""
@@ -41,9 +65,29 @@ def pick_font():
             return name
     return "TkFixedFont"
 
+def fmt_kdv(key, val):
+    return (key + ' ').ljust(ENV_FORMAT_WIDTH - len(val), '.') + ' ' + val
+
 #————————————————————————— Data —————————————————————————————#
+def _assert_sys_cmd(cmd: str) -> bool:
+    try:
+        return subprocess.run([cmd, "--version"]).returncode == 0x0
+    except:
+        return False
+
+def discover_env():
+    ENV["OS"]    = f"{os}" if (os := platform.system()) else "NOT FOUND"
+    ENV["CMake"] = "OK" if _assert_sys_cmd("cmake") else "NOT FOUND"
+    ENV["GCC"]   = "OK" if _assert_sys_cmd("gcc") else "NOT FOUND"
+    
+    for make in ENV_MAKES_TO_SEARCH:
+        if _assert_sys_cmd(make):
+            ENV["Make"] = f"{make}"
+            break
+    ENV["Make"] = ENV["Make"] or "NOT FOUND"
+
 def discover_short_junctions():
-    """Folder names directly under ./src/junctions (not recursive)."""
+    """Foldes directly under ./src/junctions, NOT recursive."""
     if not JUNCTIONS_DIR.is_dir():
         return []
     return sorted(
@@ -69,18 +113,20 @@ def load_config():
         if not path:
             continue
         if "/" in path or "\\" in path:
-            long.append(path)          # long junction -> absolute path
+            name = entry.get("name", "") if isinstance(entry, dict) else str(entry)
+            name = name.strip()
+            long.append(' '.join([name, path])) # long junction -> absolute path
         else:
-            short.add(path)            # short junction -> folder name
+            short.add(path) # short junction -> folder name
     return short, long
 
 def write_config(short_names, typed_lines):
     selected = [{"path": name} for name in short_names]
     for line in typed_lines:
-        line = line.strip()
-        if not line:
+        name, path = line.strip().split(' ', 1)
+        if not name or not path:
             continue
-        selected.append({"path": str(Path(line).expanduser().resolve())})
+        selected.append({"name": str(name), "path": str(Path(path).expanduser().resolve())})
 
     with CONFIG_FILE.open("w", encoding="utf-8") as fh:
         json.dump({"selected": selected}, fh, indent=2)
@@ -179,13 +225,15 @@ def rule(master, color, pad=(0, 0)):
 class Interface(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("cliTor // Junctions")
+        self.title("cliTor//makepie")
         self.configure(bg=C["bg"])
-        self.geometry("460x620")
-        self.minsize(400, 480)
+        self.geometry("640x940")
+        self.minsize(640, 940)
 
         self.font = pick_font()
         self.rows = []
+
+        discover_env()
 
         short_selected, long_paths = load_config()
         self._build_header()
@@ -197,14 +245,16 @@ class Interface(tk.Tk):
         head = tk.Frame(self, bg=C["bg"])
         head.pack(fill="x", padx=22, pady=(20, 0))
 
-        tk.Label(head, text="cliTor // Junctions", font=(self.font, 19, "bold"),
-                 bg=C["bg"], fg=C["cyan"]).pack(anchor="w")
+        tk.Label(head, text="cliTor//makepie", font=(self.font, 19, "bold"), bg=C["bg"], fg=C["cyan"]).pack(anchor="w")
         rule(head, C["magenta"], pad=(10, 0))
 
-        source = str(JUNCTIONS_DIR) if JUNCTIONS_DIR.is_dir() else \
-            f"{JUNCTIONS_DIR}  (missing)"
-        tk.Label(head, text=source, font=(self.font, 9), bg=C["bg"],
-                 fg=C["muted"]).pack(anchor="w", pady=(8, 0))
+        tk.Label(head, text="Environment", font=(self.font, 10), bg=C["bg"], fg=C["gold"]).pack(anchor="w", pady=(8, 0))
+        for var, val in ENV.items():
+            tk.Label(head, text=fmt_kdv(var, val), font=(self.font,10), bg=C["bg"], fg=C["text"]).pack(anchor="w", pady=(8, 0))
+        rule(head, C["magenta"], pad=(10, 0))
+
+        txt = "Built-in junctions:" if JUNCTIONS_DIR.is_dir() else f"{JUNCTIONS_DIR} (missing)"
+        tk.Label(head, text=txt, font=(self.font, 10), bg=C["bg"], fg=C["gold"]).pack(anchor="w", pady=(8, 0))
         
     def _build_list(self, selected):
         names = discover_short_junctions()
@@ -258,21 +308,21 @@ class Interface(tk.Tk):
         block = tk.Frame(self, bg=C["bg"])
         block.pack(fill="x", padx=22, pady=(16, 0))
 
-        rule(block, C["border"])
-        tk.Label(block, text="Extra paths, one per line",
-                 font=(self.font, 10), bg=C["bg"], fg=C["gold"]) \
-            .pack(anchor="w", pady=(10, 6))
+        rule(block, C["magenta"])
+        tk.Label(block, text="Other junctions: <name> <path>", font=(self.font, 10), bg=C["bg"], fg=C["gold"]).pack(anchor="w", pady=(10, 6))
 
         frame = tk.Frame(block, bg=C["border"])
         frame.pack(fill="x")
 
-        self.text = tk.Text(frame, height=6, font=(self.font, 10),
-                            bg=C["inset"], fg=C["text"],
-                            insertbackground=C["magenta"],
-                            selectbackground=C["border"],
-                            selectforeground=C["cyan"],
-                            relief="flat", padx=10, pady=8, wrap="none",
-                            highlightthickness=0)
+        self.text = tk.Text(
+            frame, height=6, font=(self.font, 10),
+            bg=C["inset"], fg=C["text"],
+            insertbackground=C["magenta"],
+            selectbackground=C["border"],
+            selectforeground=C["cyan"],
+            relief="flat", padx=10, pady=8, wrap="none",
+            highlightthickness=0
+        )
         self.text.pack(fill="x", padx=1, pady=1)
 
         if long_paths:
@@ -282,19 +332,21 @@ class Interface(tk.Tk):
         block = tk.Frame(self, bg=C["bg"])
         block.pack(fill="x", padx=22, pady=(14, 18))
 
-        rule(block, C["border"], pad=(0, 12))
+        rule(block, C["magenta"], pad=(0, 12))
 
-        self.status = tk.Label(block, text="", font=(self.font, 9),
-                               bg=C["bg"], fg=C["muted"], anchor="w")
+        self.status = tk.Label(block, text="", font=(self.font, 9), bg=C["bg"], fg=C["muted"], anchor="w")
         self.status.pack(fill="x", pady=(0, 10))
 
-        bar = tk.Frame(block, bg=C["bg"])
-        bar.pack(fill="x")
+        bar1 = tk.Frame(block, bg=C["bg"])
+        bar1.pack(fill="x")
+        NeonButton(bar1, "SELECT", C["cyan"], self.on_select, self.font).pack(side="left")
+        NeonButton(bar1, "CONFIG", C["cyan"], self.on_config, self.font).pack(side="left")
+        NeonButton(bar1, "QUIT", C["magenta"], self.destroy, self.font, width=110).pack(side="right")
 
-        NeonButton(bar, "SELECT", C["cyan"], self.on_select,
-                   self.font).pack(side="left")
-        NeonButton(bar, "QUIT", C["magenta"], self.destroy,
-                   self.font, width=110).pack(side="right")
+        bar2 = tk.Frame(block, bg=C["bg"])
+        bar2.pack(fill="x")
+        NeonButton(bar2, "BUILD", C["cyan"], self.on_build, self.font).pack(side="left")
+        NeonButton(bar2, "RUN", C["cyan"], self.on_run, self.font).pack(side="left")
 
     def on_select(self):
         checked = [row.name for row in self.rows if row.checked]
@@ -307,6 +359,36 @@ class Interface(tk.Tk):
         self.status.configure(
             text=f"Wrote {CONFIG_FILE} — {count} junction(s).", fg=C["gold"])
 
+    def on_config(self):
+        cmake_args = [
+            f"-DRGH_TARGET_OS={platform.system()}"
+        ]
+
+        self.status.configure(text="Config...",fg=C["gold"])
+        self.update_idletasks()
+
+        ret = subprocess.Popen([ENV["Make"], "config", f"CMAKE_PASS=\"{','.join(cmake_args)}\""]).wait()
+
+        if ret == 0x0:
+            self.status.configure(text=f"Config — ok.", fg=C["gold"])
+        else:
+            self.status.configure(text=f"Config — error, exit code: {ret}.", fg=C["magenta"])
+
+    def on_build(self):
+        self.status.configure(text="Build...",fg=C["gold"])
+        self.update_idletasks()
+        ret = subprocess.Popen([ENV["Make"]]).wait()
+
+        if ret == 0x0:
+            self.status.configure(text=f"Build — ok.", fg=C["gold"])
+        else:
+            self.status.configure(text=f"Build — error, exit code: {ret}.", fg=C["magenta"])
+
+    def on_run(self):
+        self.status.configure(text="Run...",fg=C["gold"])
+        self.update_idletasks()
+        ret = subprocess.Popen([ENV["Make"], "run"]).wait()
+        self.status.configure(text=f"Run — process returned {ret}.", fg=C["gold"] if ret == 0x0 else C["magenta"] )
 
 if __name__ == "__main__":
     Interface().mainloop()

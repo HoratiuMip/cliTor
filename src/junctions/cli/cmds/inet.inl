@@ -23,34 +23,34 @@
             break; }
 
             case 't': {
-                const auto ntp_server = C.str();
-                auto ntp_hosts = rgh::io::ipv4_hosts_of( ntp_server );
+                // const auto ntp_server = C.str();
+                // auto ntp_hosts = rgh::io::ipv4_hosts_of( ntp_server );
 
-                ASSERT_OR( ntp_hosts && not ntp_hosts->empty() ) {
-                    JUNCTION_DOCK_LOGE( "qinet ntp: no hosts found for {}.", ntp_server );
-                    break;
-                }
+                // ASSERT_OR( ntp_hosts && not ntp_hosts->empty() ) {
+                //     JUNCTION_DOCK_LOGE( "qinet ntp: no hosts found for {}.", ntp_server );
+                //     break;
+                // }
     
-                const auto& ntp_host = ntp_hosts->front();
+                // const auto& ntp_host = ntp_hosts->front();
 
-                rgh::io::IPv4_Kraken client;
-                auto port = client.port_of( { .addr = ntp_host, .port = rgh::io::NTP_PORT, .proto = rgh::io::IP_PROTO_UDP } );
+                // rgh::io::IPv4_Kraken client;
+                // auto port = client.port_of( { .addr = ntp_host, .port = rgh::io::NTP_PORT, .proto = rgh::io::IP_PROTO_UDP } );
 
-                auto ntp_packet = rgh::io::ntp_get( port );
-                ASSERT_OR( ntp_packet ) {
-                    JUNCTION_DOCK_LOGE( "qinet ntp: bad request from {}:{} ({})...", ntp_server, rgh::io::NTP_PORT, rgh::io::ipv4_addr_str_t{ ntp_host }.c_str() );
-                    break;
-                }   
+                // auto ntp_packet = rgh::io::ntp_get( port );
+                // ASSERT_OR( ntp_packet ) {
+                //     JUNCTION_DOCK_LOGE( "qinet ntp: bad request from {}:{} ({})...", ntp_server, rgh::io::NTP_PORT, rgh::io::ipv4_addr_str_t{ ntp_host }.c_str() );
+                //     break;
+                // }   
 
-                std::tm tm_buf{};
-                localtime_r( reinterpret_cast< std::time_t* >( &ntp_packet->ts.tx_s ), &tm_buf );
-                char buf[ 32 ]; std::strftime( buf, sizeof( buf ), "%Y-%m-%d %H:%M:%S", &tm_buf );
+                // std::tm tm_buf{};
+                // localtime_r( reinterpret_cast< std::time_t* >( &ntp_packet->ts.tx_s ), &tm_buf );
+                // char buf[ 32 ]; std::strftime( buf, sizeof( buf ), "%Y-%m-%d %H:%M:%S", &tm_buf );
                 
-                JUNCTION_DOCK_LOGI( 
-                    "qinet ntp: current NTP unix time:\n{} - {}", 
-                    ntp_packet->ts.tx_s, 
-                    buf
-                );
+                // JUNCTION_DOCK_LOGI( 
+                //     "qinet ntp: current NTP unix time:\n{} - {}", 
+                //     ntp_packet->ts.tx_s, 
+                //     buf
+                // );
 
             break; }
         RGH_FASTCLI_OPT_SWITCH_END

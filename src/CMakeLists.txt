@@ -9,6 +9,9 @@ set( CMAKE_CXX_STANDARD_REQUIRED ON )
 include( FetchContent )
 set( BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE )
 
+add_compile_options( -ffunction-sections -fdata-sections )
+add_link_options( "-Wl,--gc-sections" "-Wl,-O1" )
+
 # Check for the junctions.json configuration file.
 set( cliTor_File_JunctionsJson ${CMAKE_CURRENT_LIST_DIR}/../junctions.json )
 if( NOT EXISTS ${cliTor_File_JunctionsJson} )
@@ -28,17 +31,20 @@ if( NOT DEFINED RGH_ROOT_DIR )
         FetchContent_Declare(
             regolith_lain
             GIT_REPOSITORY https://github.com/HoratiuMip/regolith-lain.git
-            GIT_TAG 8cafbd1
+            GIT_TAG 470b88bcc349f69077c6184a82ba650a6fa54c4b
         )
         FetchContent_MakeAvailable( regolith_lain )
         set( RGH_ROOT_DIR ${regolith_lain_SOURCE_DIR} )
     endif()
+else()
+    add_subdirectory( ${RGH_ROOT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/regolith-lain/ )
 endif()
 include( ${RGH_ROOT_DIR}/tools.cmake )
 # ===== regolith-lain ===== #
 
 add_executable( ${PROJECT_NAME} main.cpp )
 target_link_libraries( ${PROJECT_NAME} PRIVATE rgh::libosp )
+target_link_options( ${PROJECT_NAME} PRIVATE "-static-libstdc++" "-static-libgcc")
 
 target_include_directories( ${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/ )
 
@@ -77,7 +83,10 @@ foreach( idx RANGE ${_selcnt} )
 # External junction.
     else()
         string( JSON name GET ${sel} "name" )
-        add_junction_ex( ${name} ${path} )
+        string( FIND ${name} "#" hash_at )
+        if( NOT hash_at EQUAL 0 )
+            add_junction_ex( ${name} ${path} )
+        endif()
     endif()
 endforeach()
 

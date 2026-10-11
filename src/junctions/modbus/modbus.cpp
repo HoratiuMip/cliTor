@@ -2,10 +2,12 @@
 
 #include <rgh/brp/IO_port.hpp>
 
+#include <print>
+
 #include <bridge.hpp>
 JUNCTION_HEADER( modbus, "modbus" )
 
-#define LOCK_CONTEXT auto ctx = this->ctx; ASSERT_OR( ctx ) { return ERR_TERMINATED; }
+#define LOCK_CONTEXT auto ctx = this->ctx; ASSERT_OR( ctx ) { std::println( "No or bad modbus context. Have you successfully TCP'd/RTU'd to the slave?" ); return ERR_TERMINATED; }
 
 class Modbus : public Dock {
 public:
