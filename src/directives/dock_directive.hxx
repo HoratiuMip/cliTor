@@ -6,7 +6,7 @@
 #
 # DETAILS: Dock related stuff.
 */
-#include "../descriptor.hxx"
+#include "descriptor_directive.hxx"
 
 #include <rgh/gep/dispenser.hpp>
 #include <rgh/osp/immersive.hpp>
@@ -36,8 +36,7 @@
 CLITOR_NAMESPACE {
 
 class Dock {
-public: friend class Bridge;
-        friend class Dock_Directive;
+public: _DIRECTIVE_FRIENDS
 
 protected:
 //# Logger used by the dock.
@@ -71,9 +70,9 @@ public:
  * @brief Pass a command line to the dock.
  * @note The macro JUNCTION_DOCK_PASS_FNC_SIG is provided to replace the function signature.
  */
-    virtual status_t dock_pass( std::string line_ ) { return ERR_NOT_IMPL; }
+    virtual rgh::ret_t dock_pass( std::string line_ ) { return ERR_NOT_IMPL; }
 #define JUNCTION_DOCK_PASS_FNC_SIG \
-    virtual status_t dock_pass( std::string line_ ) override 
+    virtual rgh::ret_t dock_pass( std::string line_ ) override 
 
 #pragma region UIX
 public:
@@ -108,9 +107,9 @@ public:
  *            function to be called consistently.
  * @note The macro JUNCTION_DOCK_UIX_FRAME_FNC_SIG is provided to replace the function signature.
  */
-    virtual status_t dock_uix_frame( const dock_uix_frame_args_t& C ) { return ERR_NOT_IMPL; }
+    virtual rgh::ret_t dock_uix_frame( const dock_uix_frame_args_t& C ) { return ERR_NOT_IMPL; }
 #define JUNCTION_DOCK_UIX_FRAME_FNC_SIG \
-    virtual status_t dock_uix_frame( const dock_uix_frame_args_t& C ) override
+    virtual rgh::ret_t dock_uix_frame( const dock_uix_frame_args_t& C ) override
 /**
  * @brief Function called by the bridge once every time the UIX is stopped.
  * @note The macro JUNCTION_DOCK_UIX_END_FNC_SIG is provided to replace the function signature.
@@ -129,21 +128,30 @@ public: _DIRECTIVE_FRIENDS
 
 protected:
     struct _dock_key_t {
+        _dock_key_t() = default;
+        explicit _dock_key_t( std::string_view id_ ) : id( id_ ) {}
+
         std::string   id   = {};
 
         struct less {
             using is_transparent = void;
 
             inline bool operator () ( const _dock_key_t& lhs_, const _dock_key_t& rhs_ ) const { return lhs_.id < rhs_.id; }
+
             inline bool operator () ( const _dock_key_t& lhs_, std::string rhs_ ) const { return lhs_.id < rhs_; }
             inline bool operator () ( const _dock_key_t& lhs_, std::string_view rhs_ ) const { return lhs_.id < rhs_; }
             inline bool operator () ( const _dock_key_t& lhs_, const char* rhs_ ) const { return lhs_.id < rhs_; }
+
+            inline bool operator () ( std::string_view lhs_, const _dock_key_t& rhs_ ) const { return lhs_ < rhs_.id; }
         };
+
+        inline const std::string* operator -> ( void ) const { return &id; }
+        inline const std::string& operator * ( void ) const { return id; }
     };
     struct _dock_entry_t {
         rgh::HVec< Dock >   ref   = nullptr;
 
-        inline auto operator->() const { return ref.operator->(); }
+        inline auto operator -> ( void ) const { return ref.operator->(); }
     };
 
 protected:
@@ -153,6 +161,10 @@ protected:
     void _dock_entry_set_id(
         IN   _dock_entry_t&   dken_,
         IN   std::string      id_
+    );
+
+    const char* _dock_id_c_str(
+        IN   const std::string&   id_
     );
 
     void _dock_entry_make_logger(
@@ -168,12 +180,12 @@ protected:
     );
 
 public:
-    ret_t install_dock(
+    rgh::ret_t install_dock(
         IN   std::string           id_,
         IN   rgh::HVec< Dock >&&   dock_
     );
 
-    ret_t uninstall_dock(
+    rgh::ret_t uninstall_dock(
         IN   std::string_view   id_
     );
 

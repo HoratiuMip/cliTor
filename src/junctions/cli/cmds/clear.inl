@@ -1,6 +1,6 @@
 {   .text = "clear",
     .opts = {},
-    .fnc = [ this ] ( auto& C ) -> status_t {
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         this->clear();
         return OK;
     }

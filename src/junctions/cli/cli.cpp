@@ -8,7 +8,7 @@
 #include <rgh/osp/IO_serial_utils.hpp>
 #include <rgh/osp/IO_inet_utils.hpp>
 
-#include <bridge.hpp>
+#include <clitor.hxx>
 JUNCTION_HEADER( cli, "#cli" )
 
 static const std::map< spdlog::level::level_enum, std::string > SPDLOG_LEVEL_TO_ANSI_COLOR_MAP = {
@@ -46,7 +46,7 @@ protected:
 };
 static replxx::Replxx _rx = {};
 
-class Cli : public Dock, public Proxy {
+class Cli : public clitor::Dock, public clitor::Proxy {
 public:
     Cli( void )
     : _cli{
@@ -86,7 +86,7 @@ protected:
 protected:
     void _cin_main( void ) {
         std::this_thread::sleep_for( std::chrono::seconds{ 1 } );
-        BridgE.resink_logger( std::make_shared< replxx_sink_t >( _rx ) );
+        clitor::BridgE.resink_logger( std::make_shared< replxx_sink_t >( _rx ) );
 
         _rx.bind_key( replxx::Replxx::KEY::control( 'C' ), [ this ] ( char32_t code_ ) {
             return replxx::Replxx::ACTION_RESULT::BAIL;
@@ -94,14 +94,14 @@ protected:
         _rx.bind_key( replxx::Replxx::KEY::control( 'W' ), [ this ] ( char32_t code_ ) {
             _rx.print( "\n" );
             auto cd = std::move( _cd );
-            ASSERT_AND( cd ) BridgE.uninstall_dock( cd->dock_id() );
+            ASSERT_AND( cd ) clitor::BridgE.uninstall_dock( cd->dock_id() );
             return replxx::Replxx::ACTION_RESULT::RETURN;
         } );
 
         //this->clear();
 
         std::string line = {}; 
-        while( BridgE.daemon_is_started() ) {
+        while( clitor::BridgE.daemon_is_started() ) {
             auto cd = _cd;
 
             const char* line = _rx.input( std::format( 
@@ -132,7 +132,7 @@ public:
         _rx.print( LOGO );
     }
 
-    status_t execute(
+    rgh::ret_t execute(
         IN   std::string   line_
     ) {
         ASSERT_OR( not line_.empty() ) return ERR_NO_RESOLVE;
@@ -163,7 +163,7 @@ public:
         }
 
         std::string out    = {};
-        status_t    status = under_cd ? _cd->dock_pass( line_ ) : _cli.execute( line_, &out );
+        rgh::ret_t    status = under_cd ? _cd->dock_pass( line_ ) : _cli.execute( line_, &out );
 
         return status;
     }
@@ -172,8 +172,9 @@ public:
     JUNCTION_PROXY_GET_NAME
     JUNCTION_PROXY_IS_DOCK
 
-    JUNCTION_PROXY_WAKE_FNC_SIG {
+    JUNCTION_PROXY_INIT_PROC_FNC_SIG {
         _cin_th = std::jthread( &Cli::_cin_main, this );
+        return OK;
     }
 
     JUNCTION_PROXY_PASS_FNC_SIG {
@@ -187,7 +188,7 @@ protected:
     } _uix;
 
 public:
-    virtual status_t dock_uix_frame( 
+    virtual rgh::ret_t dock_uix_frame( 
         IN   const dock_uix_frame_args_t&   args_ 
     ) override {
         return OK;

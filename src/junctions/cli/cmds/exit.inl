@@ -1,7 +1,7 @@
 {   .text = "exit",
     .opts = {},
-    .fnc = [ this ] ( auto& C ) -> status_t {
-        BridgE.daemon_stop();
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
+        clitor::BridgE.daemon_stop();
         return OK;
     }
 }

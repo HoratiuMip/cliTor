@@ -9,7 +9,7 @@
            "\t-t --ntp: retrieve the ntp time from the given ntp server.\n"
            "\texample: qinet --ntp pool.ntp.org"
     ,
-    .fnc = [ this ] ( auto& C ) -> status_t {
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
             case 'h': {
                 const auto domain = C.str();
@@ -19,7 +19,7 @@
                 std::string out; out.reserve( ( rgh::io::IPv4_ADDR_STR_MAX_SZ + 1 ) * hosts->size() );
                 for( const auto& host : *hosts ) out += std::format( "\n{}", rgh::io::ipv4_addr_str_t{ host }.c_str() );
 
-                JUNCTION_DOCK_LOGI( "qinet: {} hosts for {}:{}", hosts->size(), domain, out );
+                std::println( "hosts for {}:{}", hosts->size(), domain, out );
             break; }
 
             case 't': {

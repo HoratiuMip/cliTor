@@ -6,7 +6,7 @@
 #
 # DETAILS: Proxy related stuff.
 */
-#include "../descriptor.hxx"
+#include "descriptor_directive.hxx"
 #include "dock_directive.hxx"
 
 #include <memory>
@@ -23,7 +23,7 @@ protected:
     using _dock_entry_t = Dock_Directive::_dock_entry_t;
 
 public:
-    struct up_args_t {
+    struct uix_up_args_t {
         const char*                     title        = CLITOR_VERSION_STR;
         int                             width        = 648;
         int                             height       = 480;
@@ -45,24 +45,34 @@ protected:
     std::shared_ptr< _ctx_t >   _ctx   = nullptr;
 
 public:
-    rgh::ret_t up( 
-        IN   const up_args_t&
+    rgh::ret_t uix_up( 
+        IN   const uix_up_args_t&
     );
-    void down( void );
+    void uix_down( void );
 
-    rgh::ret_t focus(
+    rgh::ret_t uix_focus(
         IN   const _dock_entry_t&
     );
-    rgh::ret_t focus(
+    rgh::ret_t uix_focus(
         IN   std::string_view
     );
-    rgh::ret_t unfocus( 
+    rgh::ret_t uix_unfocus( 
         IN   const Dock*   = nullptr
     );
 
-    bool is_up( void ) { return _ctx.use_count() > 0; }
-    std::shared_ptr< rgh::Immersive > imm_strong( void ) { auto ctx = _ctx; return ctx ? ctx->imm : nullptr; }
-    rgh::Immersive* imm_weak( void ) { return _ctx->imm.get(); }
+    rgh::ret_t uix_decl_bound( 
+        IN   const uix_up_args_t& 
+    );
+
+    bool uix_is_up( void ) { return _ctx.use_count() > 0; }
+    std::shared_ptr< rgh::Immersive > uix_imm_strong( void ) { auto ctx = _ctx; return ctx ? ctx->imm : nullptr; }
+    rgh::Immersive* uix_imm_weak( void ) { return _ctx->imm.get(); }
+    operator rgh::Immersive* ( void ) { return uix_imm_weak(); }
+
+protected:
+    rgh::ret_t _uix_frame(
+        IN   const rgh::Immersive::frame_cb_args_t&
+    );
     
 public:
 //# Cyberpunk theme from: https://github.com/ocornut/imgui/issues/707.

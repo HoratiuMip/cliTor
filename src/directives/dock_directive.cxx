@@ -1,4 +1,4 @@
-#pragma once /*
+/*
 # FILE: directives/dock_directive.cxx
 # AUTHOR(s): Vatca "Mipsan" Tudor-Horatiu
 #   Copyright (c) [2026]. All rights reserved.
@@ -7,6 +7,9 @@
 # DETAILS: Implementation file.
 */
 #include "dock_directive.hxx"
+#include "bridge_directive.hxx"
+
+CLITOR_NAMESPACE {
 
 void Dock_Directive::_dock_entry_set_id(
     IN   _dock_entry_t&   dken_,
@@ -17,12 +20,21 @@ void Dock_Directive::_dock_entry_set_id(
     dock._dock_id = std::move( id_ ); 
 }
 
+const char* Dock_Directive::_dock_id_c_str(
+    IN   const std::string&   id_
+) {
+    const int forced_ord_id_offset = id_.starts_with( '/' ) ? 2 : 0;
+    return &id_[ forced_ord_id_offset ];
+}
+
 void Dock_Directive::_dock_entry_make_logger(
     IN   _dock_entry_t&   dken_
 ) {
+    DIRECTIVE_BRIDGE_SELF_SHIFT;
+
     Dock& dock = *dken_.ref;
 
-    dock._dock_logger = std::make_shared< spdlog::logger >( _dock_id_c_str( dock._dock_id ), get_logger_sink() );
+    dock._dock_logger = std::make_shared< spdlog::logger >( _dock_id_c_str( dock._dock_id ), DBSS.get_logger_sink() );
     dock._dock_logger->set_pattern( RGH_SPDLOG_PATTERN );
 }
 
@@ -43,23 +55,23 @@ void Dock_Directive::_dock_drop_hooks(
     //uix_unfocus( dken_.ref.get() );
 }
 
-ret_t Dock_Directive::install_dock(
+rgh::ret_t Dock_Directive::install_dock(
     IN   std::string           id_,
     IN   rgh::HVec< Dock >&&   dock_
 ) {
 //# Validate dock.
-    ASSERT_OR( dock_ ) { BRIDGE_LOGE( "bridge: install dock: null dock." ); return ERR_BADARG; }
+    ASSERT_OR( dock_ ) { BRIDGE_LOGE( "install dock: null dock." ); return ERR_BADARG; }
 
-    ASSERT_OR( not id_.empty() ) { BRIDGE_LOGE( "bridge: install dock: empty id." ); return ERR_BADARG; }
+    ASSERT_OR( not id_.empty() ) { BRIDGE_LOGE( "install dock: empty id." ); return ERR_BADARG; }
 
 //# Install dock.
     auto dock_tbl = _dock_tbl.control();
-    ASSERT_OR( dock_tbl ) { BRIDGE_LOGE( "bridge: install dock (\"{}\"): bad table control.", id_ ); return ERR_BUSY; }
+    ASSERT_OR( dock_tbl ) { BRIDGE_LOGE( "install dock (\"{}\"): bad table control.", id_ ); return ERR_BUSY; }
 
     auto& dock = ( *dock_tbl )[ id_ ];
     ASSERT_OR( not dock.ref ) {
         dock_tbl.release();
-        BRIDGE_LOGE( "bridge: install dock (\"{}\"): already installed.", id_ );
+        BRIDGE_LOGE( "install dock (\"{}\"): already installed.", id_ );
         return ERR_WOULD_OVRWR; 
     }
     
@@ -70,22 +82,24 @@ ret_t Dock_Directive::install_dock(
 
     dock_tbl.release();
 
-    BRIDGE_LOGI( "bridge: installed dock: \"{}\".", dock.ref->_dock_id );
+    BRIDGE_LOGI( "installed dock: \"{}\".", dock.ref->_dock_id );
     return OK;
 }
 
-ret_t Dock_Directive::uninstall_dock(
+rgh::ret_t Dock_Directive::uninstall_dock(
     IN   std::string_view   id_
 ) {
+    DIRECTIVE_BRIDGE_SELF_SHIFT;
+
 //# Acquire table control and remove the requested dock, if it exists.
     auto dock_tbl = _dock_tbl.control();
-    ASSERT_OR( dock_tbl ) { BRIDGE_LOGE( "bridge: uninstall dock {}: bad control.", id_ ); return ERR_BUSY; }
+    ASSERT_OR( dock_tbl ) { BRIDGE_LOGE( "uninstall dock {}: bad control.", id_ ); return ERR_BUSY; }
 //# Return success even if there was no matching dock.
     auto itr = dock_tbl->find( id_ ); ASSERT_OR( itr != dock_tbl->end() ) return OK;
 //# Release any hooks referencing this dock entry.
     //_dock_drop_hooks( itr->second );
 //# Trigger a UIX down for this dock.
-    if( auto imm = uix_imm_strong(); imm ) {
+    if( auto imm = DBSS.uix_imm_strong(); imm ) {
         //itr->second.ref->dock_uix_end();
         itr->second.ref->_uix_pack.reset();
     }
@@ -94,22 +108,22 @@ ret_t Dock_Directive::uninstall_dock(
     dock_tbl.release();
     spdlog::drop( std::string{ id_.data(), id_.size() } );
 
-    BRIDGE_LOGI( "bridge: uninstalled dock: {}.", id_ );
+    BRIDGE_LOGI( "uninstalled dock: {}.", id_ );
     return OK;
 }
 
-rgh::HVec< Dock > dock_by_id( 
+rgh::HVec< Dock > Dock_Directive::dock_by_id( 
     IN   std::string_view    id_,
-    IN   int                 tol_ = 0
+    IN   int                 tol_
 ) {
 //# Acquire the lock over the dock table, search for the entry and return it.
     auto dock_tbl = _dock_tbl.control();
-    ASSERT_OR( dock_tbl ) { BRIDGE_LOGE( "bridge: dock by id: bad table lock." ); return nullptr; }
+    ASSERT_OR( dock_tbl ) { BRIDGE_LOGE( "dock by id: bad table lock." ); return nullptr; }
 
     if( tol_ == 0 ) {
         auto dock_itr = dock_tbl->find( id_ ); 
         ASSERT_OR( dock_itr != dock_tbl->end() ) {
-            BRIDGE_LOGE( "bridge: dock by id: no such dock: {}.", id_ );
+            BRIDGE_LOGE( "dock by id: no such dock: {}.", id_ );
             return nullptr;
         }
         return dock_itr->second.ref;
@@ -117,8 +131,8 @@ rgh::HVec< Dock > dock_by_id(
         _dock_entry_t* min_dxen = nullptr;
         auto           min_dist = std::numeric_limits< int >::max();
 
-        for( auto& [ id, dxen ] : *dock_tbl ) {
-            const auto dist = rgh::lev_dist( id, id_ );
+        for( auto& [ key, dxen ] : *dock_tbl ) {
+            const auto dist = rgh::lev_dist( key.id, id_ );
             if( dist > tol_ or dist > min_dist ) continue;
 
             min_dxen = &dxen;
@@ -129,3 +143,5 @@ rgh::HVec< Dock > dock_by_id(
     }
     std::unreachable();
 }
+
+}//#CLITOR_NAMESPACE

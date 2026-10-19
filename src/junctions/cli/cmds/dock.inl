@@ -5,7 +5,7 @@
         { .sh0rt = 'c', .l0ng = "cd" }
     },
     .man = "Install a dock into the bridge.",
-    .fnc = [ this ] ( auto& C ) -> status_t {
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         std::string proxy_name = {};
         bool        cmd_dock   = false;
 
@@ -19,7 +19,7 @@
             return ERR_BADARG;
         }
 
-        BridgE.proxy_pass( proxy_name, "install" );
+        clitor::BridgE.proxy_pass( proxy_name, "install" );
         return OK;
     }
 },
@@ -28,7 +28,7 @@
     .opts = {
         { .sh0rt = 'd', .l0ng = "dock", .arg = rgh::Fast_cli::argtext, .fast_id = 0x0 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t {
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         std::string dock_id = {};
 
         RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
@@ -46,19 +46,19 @@
             _cd.reset();
         } 
 
-        return BridgE.uninstall_dock( dock_id );
+        return clitor::BridgE.uninstall_dock( dock_id );
     }
 },
 {   .text = "cd",
     .opts = {
         { .sh0rt = 'i', .l0ng = "id", .arg = rgh::Fast_cli::argtext, .fast_id = 0x0 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t {
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         rgh::HVec< Dock > cd = nullptr;
 
         RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
             case 'i': {
-                auto id = C.text(); cd = BridgE.dock_by_id( id ); 
+                auto id = C.text(); cd = clitor::BridgE.dock_by_id( id ); 
             break; }
         RGH_FASTCLI_OPT_SWITCH_END
 

@@ -9,7 +9,7 @@ set( CMAKE_CXX_STANDARD_REQUIRED ON )
 include( FetchContent )
 set( BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE )
 
-add_compile_options( -ffunction-sections -fdata-sections )
+add_compile_options( -ffunction-sections -fdata-sections -fmax-errors=1 )
 add_link_options( "-Wl,--gc-sections" "-Wl,-O1" )
 
 # Check for the junctions.json configuration file.
@@ -42,7 +42,8 @@ endif()
 include( ${RGH_ROOT_DIR}/tools.cmake )
 # ===== regolith-lain ===== #
 
-add_executable( ${PROJECT_NAME} main.cpp )
+file( GLOB _libclit_sources ${CMAKE_CURRENT_LIST_DIR}/directives/*.cxx )
+add_executable( ${PROJECT_NAME} main.cpp ${_libclit_sources} )
 target_link_libraries( ${PROJECT_NAME} PRIVATE rgh::libosp )
 target_link_options( ${PROJECT_NAME} PRIVATE "-static-libstdc++" "-static-libgcc")
 

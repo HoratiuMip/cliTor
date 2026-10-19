@@ -3,7 +3,7 @@
         { .sh0rt = 'n', .l0ng = "name", .arg = rgh::Fast_cli::argtext, .fast_id = 0x0 },
         { .sh0rt = 'l', .l0ng = "line", .arg = rgh::Fast_cli::argtext, .fast_id = 0x1 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t {
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         std::string proxy_name = {};
         std::string line       = {};
 
@@ -17,7 +17,7 @@
             return ERR_PARTIAL;
         }
 
-        BridgE.proxy_pass( proxy_name, std::move( line ) );
+        clitor::BridgE.proxy_pass( proxy_name, std::move( line ) );
         return OK;
     }
 }

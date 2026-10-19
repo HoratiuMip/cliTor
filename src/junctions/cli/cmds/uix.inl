@@ -5,8 +5,8 @@
         { .sh0rt = 'm', .l0ng = "minimize" },
         { .sh0rt = 'M', .l0ng = "maximize"}
     },
-    .fnc = [ this ] ( auto& C ) -> status_t {
-        Bridge::uix_up_args_t args;
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
+        clitor::Bridge::uix_up_args_t args;
 
         RGH_FASTCLI_OPT_SWITCH_BEGIN(C)
             case 'w': args.width = C.i32(); break;
@@ -16,13 +16,13 @@
             case 'M': args.bgnas = rgh::Immersive::Maximize; break;
         RGH_FASTCLI_OPT_SWITCH_END
 
-        BridgE.uix_up( args );
+        clitor::BridgE.uix_up( args );
         return OK;
     }
 },
 {   .text = "uix-down",
-    .fnc = [ this ] ( auto& C ) -> status_t {
-        BridgE.uix_down();
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
+        clitor::BridgE.uix_down();
         return OK;
     }
 }
