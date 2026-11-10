@@ -4,7 +4,7 @@
         { .sh0rt = 'a', .l0ng = "address", .arg = rgh::Fast_cli::argi32, .fast_id = 0x0 },
         { .sh0rt = 'v', .l0ng = "value", .arg = rgh::Fast_cli::argi32, .fast_id = 0x1 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t { LOCK_CONTEXT
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t { LOCK_CONTEXT
         int addr   = -0x1;
         int status = -0x1;
 
@@ -34,7 +34,7 @@
         { .sh0rt = 'n', .l0ng = "count", .arg = rgh::Fast_cli::argi32, .fast_id = 0x1 },
         { .sh0rt = 'v', .l0ng = "value", .arg = rgh::Fast_cli::argi32, .fast_id = 0x2 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t { LOCK_CONTEXT
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t { LOCK_CONTEXT
         int addr  = -0x1;
         int nb    =  0;
         int value = -0x1;
@@ -67,7 +67,7 @@
         { .sh0rt = 'a', .l0ng = "address", .arg = rgh::Fast_cli::argi32, .fast_id = 0x0 },
         { .sh0rt = 'v', .l0ng = "value", .arg = rgh::Fast_cli::argi32, .fast_id = 0x1 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t { LOCK_CONTEXT
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t { LOCK_CONTEXT
         int      addr   = -0x1;
         uint16_t value  = 0xFF'FF;
 
@@ -97,7 +97,7 @@
         { .sh0rt = 'n', .l0ng = "count", .arg = rgh::Fast_cli::argi32, .fast_id = 0x1 },
         { .sh0rt = 'v', .l0ng = "value", .arg = rgh::Fast_cli::argi32, .fast_id = 0x2 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t { LOCK_CONTEXT
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t { LOCK_CONTEXT
         int addr   = -0x1;
         int nb     =  0;
         int value  = -0x1;

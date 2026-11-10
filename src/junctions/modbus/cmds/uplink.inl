@@ -6,7 +6,7 @@
         { .sh0rt = 'p', .l0ng = "port", .arg = rgh::Fast_cli::argi32 },
         { .sh0rt = 't', .l0ng = "timeout", .arg = rgh::Fast_cli::argi32 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t {
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         std::string          ip   = {};
         rgh::io::ipv4_port_t port = MODBUS_TCP_DEFAULT_PORT;
         int                  slv  = 0x1;
@@ -21,7 +21,7 @@
 
         modbus_t* raw_ctx = modbus_new_tcp( ip.c_str(), port );
         ASSERT_OR( raw_ctx ) {
-            JUNCTION_DOCK_LOGE( "tcp: bad raw ctx: {}.", modbus_strerror( errno ) );
+            C( "tcp: bad raw ctx: {}.", modbus_strerror( errno ) );
             return ERR_BADALLOC;
         }
 
@@ -30,24 +30,24 @@
             [] ( modbus_t* ptr_ ) { modbus_free( ptr_ ); } 
         };
         ASSERT_OR( ctx ) {
-            JUNCTION_DOCK_LOGE( "tcp: bad shared ctx alloc." );
+            C( "tcp: bad shared ctx alloc." );
             return ERR_BADALLOC;
         }
 
         ASSERT_OR( modbus_connect( ctx.get() ) == 0x0 ) {
-            JUNCTION_DOCK_LOGE( "bad tcp to {}:{}: {}.", ip, port, modbus_strerror( errno ) );
+            C( "bad tcp to {}:{}: {}.", ip, port, modbus_strerror( errno ) );
             return ERR_EXCOMCALL;
         }
         ASSERT_OR( modbus_set_slave( ctx.get(), slv ) == 0x0 ) {
-            JUNCTION_DOCK_LOGW( "bad set slave id {} to {}:{}: {}.", slv, ip, port, modbus_strerror( errno ) );
+            C( "bad set slave id {} to {}:{}: {}.", slv, ip, port, modbus_strerror( errno ) );
         } 
 
         const auto tdiv = std::div( tms, 1'000 );
         ASSERT_OR( modbus_set_response_timeout( ctx.get(), tdiv.quot, tdiv.rem*1'000 ) == 0x0 ) {
-            JUNCTION_DOCK_LOGW( "bad set timeout {}ms to {}:{}: {}.", tms, ip, port, modbus_strerror( errno ) );
+            C( "bad set timeout {}ms to {}:{}: {}.", tms, ip, port, modbus_strerror( errno ) );
         }
 
-        JUNCTION_DOCK_LOGI( "tcp'd to {}:{}.", ip, port );
+        C( "tcp'd to {}:{}.", ip, port );
         return OK;
     }
 },
@@ -62,7 +62,7 @@
         { .sh0rt = 'B', .l0ng = "data-bits", .arg = rgh::Fast_cli::argi32, .fast_id = 0x3 },
         { .sh0rt = 'S', .l0ng = "stop-bits", .arg = rgh::Fast_cli::argi32, .fast_id = 0x4 }
     },
-    .fnc = [ this ] ( auto& C ) -> status_t {
+    .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         std::string dev  = {};
         int         baud = 9600;
         int         slv  = 0x1;

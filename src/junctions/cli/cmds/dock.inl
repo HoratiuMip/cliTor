@@ -4,7 +4,7 @@
         { .sh0rt = 'p', .l0ng = "proxy", .arg = rgh::Fast_cli::argtext, .fast_id = 0x0 },
         { .sh0rt = 'c', .l0ng = "cd" }
     },
-    .man = "Install a dock into the bridge.",
+    .man = "SYNOPSYS\n\tInstall a dock into the bridge.",
     .fnc = [ this ] ( auto& C ) -> rgh::ret_t {
         std::string proxy_name = {};
         bool        cmd_dock   = false;

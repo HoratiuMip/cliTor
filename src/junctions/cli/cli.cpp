@@ -51,9 +51,7 @@ public:
     Cli( void )
     : _cli{
         {
-            .when_man = [ this ] ( std::string_view cmd_, std::string_view man_ ) { 
-                JUNCTION_DOCK_LOGI( "manual for: {}:\n{}", cmd_, man_ ); 
-            }
+            .when_man = RGH_FASTCLI_DEFAULT_MAN_CMD_PRINTLN
         },
         { 
             #include "cmds/clear.inl"
