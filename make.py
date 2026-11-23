@@ -1,6 +1,4 @@
 """
-CAUTION: This file is MOSTLY GENERATED, MOSTLY UNCHECKED black box.
-
 NAME: cliTor//makepie - configure, build and install cliTor via a friendly python interface.
 
 MANUAL: Run this script using "<your_python_interpreter> make.py" or "make gui".
@@ -139,17 +137,19 @@ class JunctionRow(tk.Frame):
 
     BOX = 15
 
-    def __init__(self, master, name, checked, font):
-        super().__init__(master, bg=C["panel"], cursor="hand2")
+    def __init__(self, master, name, checked, font, bg=None, bg_hover=None):
+        self.bg = bg or C["panel"]
+        self.bg_hover = bg_hover or C["panel_hi"]
+        super().__init__(master, bg=self.bg, cursor="hand2")
         self.var = tk.BooleanVar(value=checked)
         self.name = name
 
         self.box = tk.Canvas(self, width=self.BOX + 1, height=self.BOX + 1,
-                             bg=C["panel"], highlightthickness=0, cursor="hand2")
+                             bg=self.bg, highlightthickness=0, cursor="hand2")
         self.box.pack(side="left", padx=(14, 10), pady=6)
 
         self.label = tk.Label(self, text=name, font=(font, 11), anchor="w",
-                              bg=C["panel"], fg=C["text"], cursor="hand2")
+                              bg=self.bg, fg=C["text"], cursor="hand2")
         self.label.pack(side="left", fill="x", expand=True, pady=6)
 
         for widget in (self, self.box, self.label):
@@ -178,11 +178,11 @@ class JunctionRow(tk.Frame):
 
     def _enter(self, _e):
         for w in (self, self.box, self.label):
-            w.configure(bg=C["panel_hi"])
+            w.configure(bg=self.bg_hover)
 
     def _leave(self, _e):
         for w in (self, self.box, self.label):
-            w.configure(bg=C["panel"])
+            w.configure(bg=self.bg)
 
     @property
     def checked(self):
@@ -341,12 +341,23 @@ class Interface(tk.Tk):
         bar1.pack(fill="x")
         NeonButton(bar1, "SELECT", C["cyan"], self.on_select, self.font).pack(side="left")
         NeonButton(bar1, "CONFIG", C["cyan"], self.on_config, self.font).pack(side="left")
+        self.release = JunctionRow(bar1, "Release", False, self.font,
+                                   bg=C["bg"], bg_hover=C["bg"])
+        self.release.pack(side="left")
         NeonButton(bar1, "QUIT", C["magenta"], self.destroy, self.font, width=110).pack(side="right")
 
         bar2 = tk.Frame(block, bg=C["bg"])
         bar2.pack(fill="x")
         NeonButton(bar2, "BUILD", C["cyan"], self.on_build, self.font).pack(side="left")
         NeonButton(bar2, "RUN", C["cyan"], self.on_run, self.font).pack(side="left")
+
+    def _cmake_pass(self):
+        build_type = "Release" if self.release.checked else "Debug"
+        cmake_args = [
+            f"-DRGH_TARGET_OS={platform.system()}",
+            f"-DCMAKE_BUILD_TYPE={build_type}",
+        ]
+        return f"CMAKE_PASS={' '.join(cmake_args)}"
 
     def on_select(self):
         checked = [row.name for row in self.rows if row.checked]
@@ -360,14 +371,10 @@ class Interface(tk.Tk):
             text=f"Wrote {CONFIG_FILE} — {count} junction(s).", fg=C["gold"])
 
     def on_config(self):
-        cmake_args = [
-            f"-DRGH_TARGET_OS={platform.system()}"
-        ]
-
         self.status.configure(text="Config...",fg=C["gold"])
         self.update_idletasks()
 
-        ret = subprocess.Popen([ENV["Make"], "config", f"CMAKE_PASS=\"{','.join(cmake_args)}\""]).wait()
+        ret = subprocess.Popen([ENV["Make"], "config", self._cmake_pass()]).wait()
 
         if ret == 0x0:
             self.status.configure(text=f"Config — ok.", fg=C["gold"])
