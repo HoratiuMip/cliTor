@@ -126,7 +126,7 @@ def write_config(short_names, typed_lines):
         name, path = line.strip().split(' ', 1)
         if not name or not path:
             continue
-        selected.append({"name": str(name), "path": str(Path(path).expanduser().resolve())})
+        selected.append({"name": str(name), "path": Path(path).expanduser().resolve().as_posix()})
 
     with CONFIG_FILE.open("w", encoding="utf-8") as fh:
         json.dump({"selected": selected}, fh, indent=2)
